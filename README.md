@@ -1,3 +1,11 @@
+# TrafficMonitor Eco
+
+此仓库保存针对 Surface Pro Intel 的 TrafficMonitor Eco 改动，包括事件驱动采集、任务栏按需刷新及原生电池/显存插件。
+
+**[Eco 改动、构建方法与实测结果](./ECO.md)** · 当前分支：`surface-eco-v1`。下方保留上游项目说明。
+
+---
+
 **简体中文 | [English](./README_en-us.md)**
 
 [![Badge](https://img.shields.io/badge/link-996.icu-%23FF4D5B.svg?style=flat-square)](https://996.icu/#/en_US)
@@ -143,4 +151,3 @@ TrafficMonitor支持将信息显示到任务栏。但是TrafficMonitor默认只�
 * [GitHub页面（github.com/zhongyang219/TrafficMonitor）](https://github.com/zhongyang219/TrafficMonitor)
 * [Gitee页面（gitee.com/zhongyang219/TrafficMonitor）](https://gitee.com/zhongyang219/TrafficMonitor)
 * [作者本人的百度网盘共享链接](https://pan.baidu.com/s/15PMt7s-ASpyDwtS__4cUhg) 提取码：`ou0m`
-
