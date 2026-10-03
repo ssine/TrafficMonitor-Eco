@@ -77,6 +77,7 @@ protected:
 public:
     virtual BOOL OnInitDialog();
     afx_msg void OnBnClickedSetFontButton1();
+    afx_msg void OnBnClickedUseConsolas();
     afx_msg void OnBnClickedTaskbarWndOnLeftCheck();
     afx_msg void OnBnClickedSpeedShortModeCheck();
     virtual BOOL PreTranslateMessage(MSG* pMsg);
@@ -113,6 +114,7 @@ public:
     afx_msg void OnEnChangeVerticalMarginEdit();
     virtual BOOL OnCommand(WPARAM wParam, LPARAM lParam);
     afx_msg void OnBnClickedShowNetSpeedFigureCheck();
+    afx_msg void OnBnClickedNetSpeedAutoScaleCheck();
     afx_msg void OnCbnSelchangeNetSpeedFigureMaxValueUnitCombo();
     afx_msg void OnEnChangeNetSpeedFigureMaxValueEdit();
     afx_msg void OnBnClickedGdiRadio();

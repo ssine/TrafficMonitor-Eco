@@ -1,4 +1,4 @@
-// Native battery and adapter-memory collector for the Surface Eco build.
+﻿// Native battery and adapter-memory collector for the Surface Eco build.
 // No hardware sensor library, WMI polling, subprocesses, or private timer.
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -213,14 +213,7 @@ std::wstring Format(double value, bool valid, const wchar_t* format) {
     if (!valid || !std::isfinite(value)) return L"N/A";
     wchar_t buffer[64]; swprintf_s(buffer, format, value);
     std::wstring text = buffer;
-    // Match the existing PowerMon settings: up to two decimals, unit spacing.
-    const auto unit = text.find(L' ');
-    if (unit != std::wstring::npos) {
-        size_t end = unit;
-        while (end > 0 && text[end - 1] == L'0') --end;
-        if (end > 0 && text[end - 1] == L'.') --end;
-        text.erase(end, unit - end);
-    }
+    // Fixed decimals keep the numeric columns steady as values change.
     return text;
 }
 
@@ -229,8 +222,8 @@ public:
     IPluginItem* GetItem(int index) override { return index >= 0 && index < 4 ? &items_[index] : nullptr; }
     void DataRequired() override {
         const auto s = collector_.Read(false, gpuRequested_.exchange(false, std::memory_order_relaxed));
-        items_[0].Set(Format(s.power, s.powerValid, L"%+.2f W"));
-        items_[1].Set(Format(s.energy, s.energyValid, L"%.2f Wh"));
+        items_[0].Set(Format(s.power, s.powerValid, L"%+.1f W"));
+        items_[1].Set(Format(s.energy, s.energyValid, L"%.1f Wh"));
         items_[2].Set(Format(s.dedicated / (1024 * 1024 * 1024.0), s.dedicatedValid, L"%.2f G"));
         items_[3].Set(Format(s.shared / (1024 * 1024 * 1024.0), s.sharedValid, L"%.2f G"));
     }
@@ -240,7 +233,7 @@ public:
         case TMI_DESCRIPTION: return L"Native battery W/Wh and adapter GPU memory. Battery refresh: 3s. No sensor library.";
         case TMI_AUTHOR: return L"Sine / Codex";
         case TMI_COPYRIGHT: return L"2026 Sine";
-        case TMI_VERSION: return L"0.1.0";
+        case TMI_VERSION: return L"0.2.0";
         default: return L"";
         }
     }
@@ -253,8 +246,8 @@ private:
     Collector collector_;
     std::atomic<bool> gpuRequested_{ false };
     Item items_[4]{
-        {L"电池功率", L"BatteryPowerMon", L"PWR:", L"-99.99 W"},
-        {L"剩余电量", L"BatteryCapacityMon", L"BAT:", L"99.99 Wh"},
+        {L"电池功率", L"BatteryPowerMon", L"PWR:", L"+999.9 W"},
+        {L"剩余电量", L"BatteryCapacityMon", L"BAT:", L"999.9 Wh"},
         {L"专用显存", L"eco_gpu_dedicated", L"VRAM:", L"9.99 G", &gpuRequested_},
         {L"共享显存", L"eco_gpu_shared", L"SHR:", L"9.99 G", &gpuRequested_}
     };

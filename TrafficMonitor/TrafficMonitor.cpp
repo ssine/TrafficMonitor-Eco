@@ -261,6 +261,7 @@ void CTrafficMonitorApp::LoadConfig()
     m_taskbar_data.auto_save_taskbar_color_settings_to_preset = ini.GetBool(L"task_bar", L"auto_save_taskbar_color_settings_to_preset", true);
 
     m_taskbar_data.show_netspeed_figure = ini.GetBool(L"task_bar", L"show_netspeed_figure", true);
+    m_taskbar_data.netspeed_figure_auto_scale = ini.GetBool(L"task_bar", L"netspeed_figure_auto_scale", true);
     m_taskbar_data.netspeed_figure_max_value = ini.GetInt(L"task_bar", L"netspeed_figure_max_value", 10);
     m_taskbar_data.netspeed_figure_max_value_unit = ini.GetInt(L"task_bar", L"netspeed_figure_max_value_unit", 1);
     m_taskbar_data.graph_color_following_system = ini.GetBool(L"task_bar", L"graph_color_following_system", true);
@@ -417,6 +418,7 @@ void CTrafficMonitorApp::SaveConfig()
     ini.WriteBool(L"task_bar", L"auto_save_taskbar_color_settings_to_preset", m_taskbar_data.auto_save_taskbar_color_settings_to_preset);
 
     ini.WriteBool(L"task_bar", L"show_netspeed_figure", m_taskbar_data.show_netspeed_figure);
+    ini.WriteBool(L"task_bar", L"netspeed_figure_auto_scale", m_taskbar_data.netspeed_figure_auto_scale);
     ini.WriteInt(L"task_bar", L"netspeed_figure_max_value", m_taskbar_data.netspeed_figure_max_value);
     ini.WriteInt(L"task_bar", L"netspeed_figure_max_value_unit", m_taskbar_data.netspeed_figure_max_value_unit);
     ini.WriteBool(L"task_bar", L"graph_color_following_system", m_taskbar_data.graph_color_following_system);

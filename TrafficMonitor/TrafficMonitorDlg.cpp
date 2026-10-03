@@ -2917,6 +2917,9 @@ afx_msg LRESULT CTrafficMonitorDlg::OnMonitorInfoUpdated(WPARAM wParam, LPARAM l
                 values += L'\n';
             }
         }
+        if (values != m_last_taskbar_values && m_tBarDlg->RefreshItemWidths())
+            m_tBarDlg->AdjustWindowPos(true);
+        m_tBarDlg->UpdateGraphHistory();
         // Graphs and custom drawing may change even when rounded text does not.
         const bool animated = custom_draw || theApp.m_taskbar_data.show_netspeed_figure ||
             theApp.m_taskbar_data.show_status_bar;

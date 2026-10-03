@@ -243,7 +243,7 @@ struct PublicSettingData
     bool specify_each_item_color{ false };      //是否指定每个项目的颜色
     FontInfo font;          //字体
     DispStrings disp_str;   //显示的文本
-    bool speed_short_mode{ false };     //网速显示简洁模式（减少小数点的位数，单位不显示“B”）
+    bool speed_short_mode{ false };     //网速显示简洁模式（单位不显示“B”）
     bool separate_value_unit_with_space{ true };    //网速数值和单位用空格分隔
     bool show_tool_tip{ true };         //显示鼠标提示
     MemoryDisplay memory_display{ MemoryDisplay::USAGE_PERCENTAGE };    //内存显示方式
@@ -333,6 +333,7 @@ struct TaskBarSettingData : public PublicSettingData
     int taskbar_right_space_win11{};        //Windows11下，任务栏窗口距离任务栏右侧的宽度（仅当无法获取到任务栏TrayNotifyWnd窗口的位置时有效）
 
     bool show_netspeed_figure{ false };     //是否显示网速占用图
+    bool netspeed_figure_auto_scale{ true }; // Upload/download scale independently from recent raw samples.
     int netspeed_figure_max_value;          //网速占用图的最大值
     int netspeed_figure_max_value_unit{};   //网速占用图最大值的单位（0: KB, 1: MB）
     unsigned __int64 GetNetspeedFigureMaxValueInBytes() const;  //获取网速占用图的最大值（以字节为单位）

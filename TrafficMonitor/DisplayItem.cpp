@@ -328,26 +328,18 @@ CString CommonDisplayItem::GetItemValueSampleText(bool is_main_window) const
         case TDI_DOWN:
         case TDI_TOTAL_SPEED:
         {
-            wstring digits(theApp.m_taskbar_data.digits_number, L'8');      //根据数据位数生成指定个数的“8”
-            bool hide_unit{ theApp.m_taskbar_data.hide_unit && theApp.m_taskbar_data.speed_unit != SpeedUnit::AUTO };
-            if (theApp.m_taskbar_data.speed_short_mode)
+            wstring digits(theApp.m_taskbar_data.digits_number, L'8');
+            bool hide_unit = theApp.m_taskbar_data.hide_unit && theApp.m_taskbar_data.speed_unit != SpeedUnit::AUTO;
+            CString number;
+            number.Format(L"%s.8", digits.c_str());
+            sample_str = number;
+            if (!hide_unit)
             {
-                if (hide_unit)
-                    sample_str.Format(_T("%s."), digits.c_str());
-                else
-                    sample_str.Format(_T("%s.M/s"), digits.c_str());
+                if (theApp.m_taskbar_data.separate_value_unit_with_space) sample_str += L' ';
+                sample_str += theApp.m_taskbar_data.speed_short_mode ?
+                    (theApp.m_taskbar_data.unit_byte ? L"M/s" : L"Mb/s") :
+                    (theApp.m_taskbar_data.unit_byte ? L"MB/s" : L"Mb/s");
             }
-            else
-            {
-                if (hide_unit)
-                    sample_str.Format(_T("%s.8"), digits.c_str());
-                else
-                    sample_str.Format(_T("%s.8MB/s"), digits.c_str());
-            }
-            if (!hide_unit && theApp.m_taskbar_data.separate_value_unit_with_space)
-                sample_str += _T(' ');
-            if (theApp.m_taskbar_data.speed_short_mode && !theApp.m_taskbar_data.unit_byte && !theApp.m_taskbar_data.hide_unit)
-                sample_str += _T('b');
         }
             break;
         //占用率百分比

@@ -109,8 +109,9 @@ void CTaskBarSettingsDlg::EnableControl()
     m_status_bar_color_static.EnableWindow(m_data.show_status_bar || m_data.show_netspeed_figure);
     EnableDlgCtrl(IDC_CM_GRAPH_BAR_RADIO, m_data.show_status_bar || m_data.show_netspeed_figure);
     EnableDlgCtrl(IDC_CM_GRAPH_PLOT_RADIO, m_data.show_status_bar || m_data.show_netspeed_figure);
-    EnableDlgCtrl(IDC_NET_SPEED_FIGURE_MAX_VALUE_EDIT, m_data.show_netspeed_figure);
-    EnableDlgCtrl(IDC_NET_SPEED_FIGURE_MAX_VALUE_UNIT_COMBO, m_data.show_netspeed_figure);
+    EnableDlgCtrl(IDC_NET_SPEED_AUTO_SCALE_CHECK, m_data.show_netspeed_figure);
+    EnableDlgCtrl(IDC_NET_SPEED_FIGURE_MAX_VALUE_EDIT, m_data.show_netspeed_figure && !m_data.netspeed_figure_auto_scale);
+    EnableDlgCtrl(IDC_NET_SPEED_FIGURE_MAX_VALUE_UNIT_COMBO, m_data.show_netspeed_figure && !m_data.netspeed_figure_auto_scale);
     //Win11下，任务栏左对齐时禁用“任务栏窗口显示在任务栏左侧”的选项
     EnableDlgCtrl(IDC_TASKBAR_WND_ON_LEFT_CHECK, !theApp.IsWindows11Taskbar() || CWindowsSettingHelper::IsTaskbarCenterAlign());
     EnableDlgCtrl(IDC_ENABLE_COLOR_EMOJI_CHECK, !m_data.disable_d2d);
@@ -139,7 +140,8 @@ bool CTaskBarSettingsDlg::InitializeControls()
         { CtrlTextInfo::C0, IDC_FONT_NAME_EDIT1 },
         { CtrlTextInfo::R1, IDC_FONT_SIZE_STATIC },
         { CtrlTextInfo::R2, IDC_FONT_SIZE_EDIT1 },
-        { CtrlTextInfo::R3, IDC_SET_FONT_BUTTON1, CtrlTextInfo::W16 }
+        { CtrlTextInfo::R3, IDC_SET_FONT_BUTTON1, CtrlTextInfo::W16 },
+        { CtrlTextInfo::R4, IDC_USE_CONSOLAS_BUTTON, CtrlTextInfo::W16 }
     });
     RepositionTextBasedControls({
         { CtrlTextInfo::L2, IDC_TXT_COLOR_STATIC },
@@ -230,6 +232,7 @@ void CTaskBarSettingsDlg::DoDataExchange(CDataExchange* pDX)
 
 BEGIN_MESSAGE_MAP(CTaskBarSettingsDlg, CTabDlg)
     ON_BN_CLICKED(IDC_SET_FONT_BUTTON1, &CTaskBarSettingsDlg::OnBnClickedSetFontButton1)
+    ON_BN_CLICKED(IDC_USE_CONSOLAS_BUTTON, &CTaskBarSettingsDlg::OnBnClickedUseConsolas)
     ON_BN_CLICKED(IDC_TASKBAR_WND_ON_LEFT_CHECK, &CTaskBarSettingsDlg::OnBnClickedTaskbarWndOnLeftCheck)
     ON_BN_CLICKED(IDC_SPEED_SHORT_MODE_CHECK, &CTaskBarSettingsDlg::OnBnClickedSpeedShortModeCheck)
     ON_CBN_SELCHANGE(IDC_UNIT_COMBO, &CTaskBarSettingsDlg::OnCbnSelchangeUnitCombo)
@@ -261,6 +264,7 @@ BEGIN_MESSAGE_MAP(CTaskBarSettingsDlg, CTabDlg)
     ON_EN_CHANGE(IDC_ITEM_SPACE_EDIT, &CTaskBarSettingsDlg::OnEnChangeItemSpaceEdit)
     ON_EN_CHANGE(IDC_VERTICAL_MARGIN_EDIT, &CTaskBarSettingsDlg::OnEnChangeVerticalMarginEdit)
     ON_BN_CLICKED(IDC_SHOW_NET_SPEED_FIGURE_CHECK, &CTaskBarSettingsDlg::OnBnClickedShowNetSpeedFigureCheck)
+    ON_BN_CLICKED(IDC_NET_SPEED_AUTO_SCALE_CHECK, &CTaskBarSettingsDlg::OnBnClickedNetSpeedAutoScaleCheck)
     ON_CBN_SELCHANGE(IDC_NET_SPEED_FIGURE_MAX_VALUE_UNIT_COMBO, &CTaskBarSettingsDlg::OnCbnSelchangeNetSpeedFigureMaxValueUnitCombo)
     ON_EN_CHANGE(IDC_NET_SPEED_FIGURE_MAX_VALUE_EDIT, &CTaskBarSettingsDlg::OnEnChangeNetSpeedFigureMaxValueEdit)
     ON_BN_CLICKED(IDC_GDI_RADIO, &CTaskBarSettingsDlg::OnBnClickedGdiRadio)
@@ -400,6 +404,7 @@ BOOL CTaskBarSettingsDlg::OnInitDialog()
     m_memory_display_combo.SetCurSel(static_cast<int>(m_data.memory_display));
 
     CheckDlgButton(IDC_SHOW_NET_SPEED_FIGURE_CHECK, m_data.show_netspeed_figure);
+    CheckDlgButton(IDC_NET_SPEED_AUTO_SCALE_CHECK, m_data.netspeed_figure_auto_scale);
     m_net_speed_figure_max_val_edit.SetRange(1, 1024);
     m_net_speed_figure_max_val_edit.SetValue(m_data.netspeed_figure_max_value);
     m_net_speed_figure_max_val_unit_combo.AddString(_T("KB"));
@@ -464,6 +469,14 @@ BOOL CTaskBarSettingsDlg::OnInitDialog()
                   // 异常: OCX 属性页应返回 FALSE
 }
 
+
+void CTaskBarSettingsDlg::OnBnClickedUseConsolas()
+{
+    m_data.font.name = L"Consolas";
+    if (m_data.font.size < 10) m_data.font.size = 10;
+    m_font_size_edit.SetValue(m_data.font.size);
+    SetDlgItemText(IDC_FONT_NAME_EDIT1, m_data.font.name);
+}
 
 void CTaskBarSettingsDlg::OnBnClickedSetFontButton1()
 {
@@ -910,6 +923,12 @@ void CTaskBarSettingsDlg::OnBnClickedShowNetSpeedFigureCheck()
     EnableControl();
 }
 
+
+void CTaskBarSettingsDlg::OnBnClickedNetSpeedAutoScaleCheck()
+{
+    m_data.netspeed_figure_auto_scale = IsDlgButtonChecked(IDC_NET_SPEED_AUTO_SCALE_CHECK) != 0;
+    EnableControl();
+}
 
 void CTaskBarSettingsDlg::OnCbnSelchangeNetSpeedFigureMaxValueUnitCombo()
 {

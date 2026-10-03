@@ -19,6 +19,28 @@
 #include "DXProgrammableCapture.h"
 #endif
 
+namespace {
+// Identify numeric values with either adjacent or separated units.
+int NumericUnitSplit(const CString& text)
+{
+    int i = 0;
+    bool digit = false, decimal = false;
+    if (!text.IsEmpty() && (text[0] == L'+' || text[0] == L'-')) ++i;
+    for (; i < text.GetLength(); ++i)
+    {
+        wchar_t c = text[i];
+        if (c >= L'0' && c <= L'9') digit = true;
+        else if (c == L'.' && !decimal) decimal = true;
+        else break;
+    }
+    while (i < text.GetLength() && text[i] == L' ') ++i;
+    if (!digit || i >= text.GetLength()) return -1;
+    wchar_t unit = text[i];
+    if (!((unit >= L'A' && unit <= L'Z') || (unit >= L'a' && unit <= L'z') || unit == L'%' || unit >= 128)) return -1;
+    return i;
+}
+}
+
 // CTaskBarDlg 对话框
 
 IMPLEMENT_DYNAMIC(CTaskBarDlg, CDialogEx)
@@ -30,10 +52,6 @@ CTaskBarDlg::CTaskBarDlg(CWnd* pParent /*=NULL*/)
 
 CTaskBarDlg::~CTaskBarDlg()
 {
-    for (auto iter = m_map_history_data.begin(); iter != m_map_history_data.end(); ++iter)
-    {
-        iter->second.clear();
-    }
 }
 
 void CTaskBarDlg::DoDataExchange(CDataExchange* pDX)
@@ -190,9 +208,9 @@ void CTaskBarDlg::ShowInfo(CDC* pDC)
         if (!item_rect.IsRectEmpty())
         {
             if (iter->IsPlugin())
-                DrawPluginItem(draw, iter->PluginItem(), item_rect, iter->item_width.label_width, iter->is_double_line);
+                DrawPluginItem(draw, iter->PluginItem(), item_rect, iter->item_width.label_width, iter->is_double_line, iter->item_width.unit_width);
             else
-                DrawDisplayItem(draw, iter->ItemType(), item_rect, iter->item_width.label_width, iter->is_double_line);
+                DrawDisplayItem(draw, iter->ItemType(), item_rect, iter->item_width.label_width, iter->is_double_line, iter->item_width.unit_width);
         }
     }
 
@@ -204,7 +222,7 @@ void CTaskBarDlg::ShowInfo(CDC* pDC)
 #endif
 }
 
-void CTaskBarDlg::DrawDisplayItem(IDrawCommon& drawer, DisplayItem type, CRect rect, int label_width, bool vertical)
+void CTaskBarDlg::DrawDisplayItem(IDrawCommon& drawer, DisplayItem type, CRect rect, int label_width, bool vertical, int unit_width)
 {
     //设置要绘制的文本颜色
     COLORREF label_color{};
@@ -270,13 +288,13 @@ void CTaskBarDlg::DrawDisplayItem(IDrawCommon& drawer, DisplayItem type, CRect r
         //    figure_value = theApp.m_cpu_freq;
         //    break;
         case TDI_UP:
-            figure_value = CalculateNetspeedPercent(theApp.m_out_speed);
+            figure_value = CalculateNetspeedPercent(type, theApp.m_out_speed);
             break;
         case TDI_DOWN:
-            figure_value = CalculateNetspeedPercent(theApp.m_in_speed);
+            figure_value = CalculateNetspeedPercent(type, theApp.m_in_speed);
             break;
         case TDI_TOTAL_SPEED:
-            figure_value = CalculateNetspeedPercent(theApp.m_in_speed + theApp.m_out_speed);
+            figure_value = CalculateNetspeedPercent(type, theApp.m_in_speed + theApp.m_out_speed);
             break;
         default:
             break;
@@ -287,7 +305,6 @@ void CTaskBarDlg::DrawDisplayItem(IDrawCommon& drawer, DisplayItem type, CRect r
         {
             if (theApp.m_taskbar_data.cm_graph_type)
             {
-                AddHisToList(type, figure_value);
                 TryDrawGraph(drawer, rect, type);
             }
             else
@@ -305,14 +322,11 @@ void CTaskBarDlg::DrawDisplayItem(IDrawCommon& drawer, DisplayItem type, CRect r
     }
 
     //绘制数值
-    IDrawCommon::Alignment value_alignment{ theApp.m_taskbar_data.value_right_align ? IDrawCommon::Alignment::RIGHT : IDrawCommon::Alignment::LEFT };      //数值的对齐方式
-    if (vertical)
-        value_alignment = IDrawCommon::Alignment::CENTER;
     CString str_value = CommonDisplayItem(type).GetItemValueText(false);
-    drawer.DrawWindowText(rect_value, str_value, text_color, value_alignment);
+    DrawValueText(drawer, rect_value, str_value, text_color, vertical, unit_width);
 }
 
-void CTaskBarDlg::DrawPluginItem(IDrawCommon& drawer, IPluginItem* item, CRect rect, int label_width, bool vertical)
+void CTaskBarDlg::DrawPluginItem(IDrawCommon& drawer, IPluginItem* item, CRect rect, int label_width, bool vertical, int unit_width)
 {
     if (item == nullptr)
         return;
@@ -327,7 +341,6 @@ void CTaskBarDlg::DrawPluginItem(IDrawCommon& drawer, IPluginItem* item, CRect r
             //横向滚动图
             if (theApp.m_taskbar_data.cm_graph_type)
             {
-                AddHisToList(item, figure_value);
                 TryDrawGraph(drawer, rect, item);
             }
             //柱状图
@@ -412,10 +425,29 @@ void CTaskBarDlg::DrawPluginItem(IDrawCommon& drawer, IPluginItem* item, CRect r
         CString lable_text = theApp.m_taskbar_data.disp_str.GetConst(item).c_str();
         drawer.DrawWindowText(rect_label, lable_text, label_text_color, (vertical ? IDrawCommon::Alignment::CENTER : IDrawCommon::Alignment::LEFT));
         //画数值
-        IDrawCommon::Alignment value_alignment{ theApp.m_taskbar_data.value_right_align ? IDrawCommon::Alignment::RIGHT : IDrawCommon::Alignment::LEFT };      //数值的对齐方式
-        if (vertical)
-            value_alignment = IDrawCommon::Alignment::CENTER;
-        drawer.DrawWindowText(rect_value, item->GetItemValueText(), value_text_color, value_alignment);
+        DrawValueText(drawer, rect_value, CString(item->GetItemValueText()), value_text_color, vertical, unit_width);
+    }
+}
+
+void CTaskBarDlg::DrawValueText(IDrawCommon& drawer, CRect rect, const CString& text, COLORREF color, bool vertical, int unit_width)
+{
+    const bool right_align = theApp.m_taskbar_data.value_right_align;
+    int split = NumericUnitSplit(text);
+    if (right_align && !vertical && unit_width > 0 && split > 0)
+    {
+        CRect number_rect = rect, unit_rect = rect;
+        number_rect.right -= unit_width;
+        unit_rect.left = number_rect.right + (theApp.m_taskbar_data.separate_value_unit_with_space ? max(1, m_pDC->GetTextExtent(L" ").cx) : 0);
+        CString number = text.Left(split);
+        number.TrimRight();
+        drawer.DrawWindowText(number_rect, number, color, IDrawCommon::Alignment::RIGHT);
+        drawer.DrawWindowText(unit_rect, text.Mid(split), color, IDrawCommon::Alignment::LEFT);
+    }
+    else
+    {
+        auto align = vertical ? IDrawCommon::Alignment::CENTER :
+            (right_align ? IDrawCommon::Alignment::RIGHT : IDrawCommon::Alignment::LEFT);
+        drawer.DrawWindowText(rect, text, color, align);
     }
 }
 
@@ -744,6 +776,13 @@ void CTaskBarDlg::ApplySettings()
     CalculateWindowSize();
 }
 
+bool CTaskBarDlg::RefreshItemWidths()
+{
+    int old_width = m_window_width, old_height = m_window_height;
+    CalculateWindowSize();
+    return old_width != m_window_width || old_height != m_window_height;
+}
+
 void CTaskBarDlg::CalculateWindowSize()
 {
     bool horizontal_arrange = theApp.m_taskbar_data.horizontal_arrange && m_taskbar_on_top_or_bottom;
@@ -755,6 +794,20 @@ void CTaskBarDlg::CalculateWindowSize()
     std::map<CommonDisplayItem, ItemWidth> item_widths;
 
     m_pDC->SelectObject(&m_font);
+    const int gap = max(1, m_pDC->GetTextExtent(L" ").cx);
+    auto measure_value = [&](ItemWidth& width, const CString& sample)
+    {
+        width.value_width = m_pDC->GetTextExtent(sample).cx + DPI(2);
+        int split = NumericUnitSplit(sample);
+        if (split > 0)
+        {
+            CString number = sample.Left(split);
+            number.TrimRight();
+            width.number_width = m_pDC->GetTextExtent(number).cx + DPI(2);
+            width.unit_width = m_pDC->GetTextExtent(sample.Mid(split)).cx + (theApp.m_taskbar_data.separate_value_unit_with_space ? gap : 0);
+            width.value_width = width.number_width + width.unit_width;
+        }
+    };
     //计算标签和数值的宽度
     //const auto& item_map = theApp.m_taskbar_data.disp_str.GetAllItems();
     for (auto iter = theApp.m_plugins.AllDisplayItemsWithPlugins().begin(); iter != theApp.m_plugins.AllDisplayItemsWithPlugins().end(); ++iter)
@@ -776,18 +829,21 @@ void CTaskBarDlg::CalculateWindowSize()
                 else
                 {
                     CString lable_text = theApp.m_taskbar_data.disp_str.GetConst(plugin).c_str();
-                    label_width = m_pDC->GetTextExtent(lable_text).cx;
-                    value_width = m_pDC->GetTextExtent(plugin->GetItemValueSampleText()).cx;
+                    lable_text.TrimRight();
+                    label_width = lable_text.IsEmpty() ? 0 : m_pDC->GetTextExtent(lable_text).cx + gap;
+                    measure_value(item_widths[plugin], CString(plugin->GetItemValueText()));
                 }
             }
         }
         else
         {
             //标签宽度
-            item_widths[*iter].label_width = m_pDC->GetTextExtent(theApp.m_taskbar_data.disp_str.GetConst(*iter).c_str()).cx;
+            CString label = theApp.m_taskbar_data.disp_str.GetConst(*iter).c_str();
+            label.TrimRight();
+            item_widths[*iter].label_width = label.IsEmpty() ? 0 : m_pDC->GetTextExtent(label).cx + gap;
             //数值宽度
-            CString sample_str = iter->GetItemValueSampleText(false);
-            item_widths[*iter].value_width = m_pDC->GetTextExtent(sample_str).cx;
+            CString sample_str = iter->GetItemValueText(false);
+            measure_value(item_widths[*iter], sample_str);
         }
     }
 
@@ -842,7 +898,6 @@ void CTaskBarDlg::CalculateWindowSize()
             int y_pos_up = -DPI(theApp.m_taskbar_data.vertical_margin) / 2;
             int y_pos_down = y_pos_up + item_height + DPI(theApp.m_taskbar_data.vertical_margin);
 
-            int width0 = 0;
             int max_width0 = 0;
             bool has_first_item = false;
             auto first_iter = m_item_widths.end(); // 用于保存当前列第一个项目的迭代器，以便后续修正其宽度
@@ -875,19 +930,28 @@ void CTaskBarDlg::CalculateWindowSize()
                     if (!has_first_item)
                     {
                         // 当前列的第一个项目（上半部分），占一行
-                        width0 = iter->item_width.TotalWidth();
                         max_width0 = iter->item_width.MaxWidth();
 
                         first_iter = iter;
                         // 暂时设置 rect，right 边界会在配对成功或循环结束时根据列最大宽度进行修正
-                        m_item_rects[*iter].SetRect(current_x, y_pos_up, current_x + width0, y_pos_up + item_height);
+                        m_item_rects[*iter].SetRect(current_x, y_pos_up, current_x + iter->item_width.TotalWidth(), y_pos_up + item_height);
 
                         has_first_item = true;
                     }
                     else
                     {
                         // 当前列的第二个项目（下半部分），占一行，与第一个项目组成一列
-                        int col_width = max(width0, iter->item_width.TotalWidth());
+                        // Share label, number and unit columns across both rows.
+                        auto& first_width = first_iter->item_width;
+                        auto& second_width = iter->item_width;
+                        int label_width = max(first_width.label_width, second_width.label_width);
+                        int number_width = max(first_width.number_width, second_width.number_width);
+                        int unit_width = max(first_width.unit_width, second_width.unit_width);
+                        int value_width = max(max(first_width.value_width, second_width.value_width), number_width + unit_width);
+                        first_width.label_width = second_width.label_width = label_width;
+                        first_width.unit_width = second_width.unit_width = unit_width;
+                        first_width.value_width = second_width.value_width = value_width;
+                        int col_width = label_width + value_width;
 
                         // 修正第一个项目的右边界，确保同一列的两个项目宽度一致
                         m_item_rects[*first_iter].right = current_x + col_width;
@@ -1357,43 +1421,60 @@ void CTaskBarDlg::OnPaint()
 
 }
 
-void CTaskBarDlg::AddHisToList(CommonDisplayItem item_type, int current_usage_percent)
+void CTaskBarDlg::UpdateGraphHistory()
 {
-    int& data_count{ m_history_data_count[item_type] };
-    std::list<int>& list = m_map_history_data[item_type];
-    //将数累加到加链表的头部，直到添加的数据数量达到TASKBAR_GRAPH_STEP的倍数时计算平均数
-    if (data_count % TASKBAR_GRAPH_STEP == 0)
+    const auto now = GetTickCount64();
+    for (const auto& item : m_item_widths)
     {
-        //计算前面累加的TASKBAR_GRAPH_STEP个数据的平均数
-        if (!list.empty())
-            list.front() /= TASKBAR_GRAPH_STEP;
-        //将新的数据添加到末尾
-        list.push_front(current_usage_percent);
+        double value = 0;
+        bool network = false;
+        if (item.IsPlugin())
+        {
+            auto* plugin = theApp.m_plugins.GetPluginByItem(item.PluginItem());
+            if (!theApp.m_taskbar_data.show_status_bar || !plugin || plugin->GetAPIVersion() < 6 ||
+                !item.PluginItem()->IsDrawResourceUsageGraph()) continue;
+            value = item.PluginItem()->GetResourceUsageGraphValue() * 100;
+        }
+        else
+        {
+            auto type = item.ItemType();
+            network = type == TDI_UP || type == TDI_DOWN || type == TDI_TOTAL_SPEED;
+            if (network ? !theApp.m_taskbar_data.show_netspeed_figure : !theApp.m_taskbar_data.show_status_bar) continue;
+            switch (type)
+            {
+            case TDI_UP: value = static_cast<double>(theApp.m_out_speed); break;
+            case TDI_DOWN: value = static_cast<double>(theApp.m_in_speed); break;
+            case TDI_TOTAL_SPEED: value = static_cast<double>(theApp.m_in_speed) + theApp.m_out_speed; break;
+            case TDI_CPU: value = theApp.m_cpu_usage; break;
+            case TDI_MEMORY: value = theApp.m_memory_usage; break;
+            case TDI_GPU_USAGE: value = theApp.m_gpu_usage; break;
+            case TDI_CPU_TEMP: value = theApp.m_cpu_temperature; break;
+            case TDI_GPU_TEMP: value = theApp.m_gpu_temperature; break;
+            case TDI_HDD_TEMP: value = theApp.m_hdd_temperature; break;
+            case TDI_MAIN_BOARD_TEMP: value = theApp.m_main_board_temperature; break;
+            case TDI_HDD_USAGE: value = theApp.m_hdd_usage; break;
+            default: continue;
+            }
+        }
+        m_map_history_data[item].Add(now, value, network && theApp.m_taskbar_data.netspeed_figure_auto_scale);
     }
-    else
-    {
-        //数累加到加链表的头部
-        list.front() += current_usage_percent;
-    }
-    size_t graph_max_length = m_item_rects[item_type].Width();
-    //判断是否超过最大长度，如果超过，将链表尾部数据移除
-    if (list.size() > graph_max_length)
-    {
-        list.pop_back();
-    }
-    data_count++;
 }
 
-int CTaskBarDlg::CalculateNetspeedPercent(unsigned __int64 net_speed)
+double CTaskBarDlg::GetGraphScale(CommonDisplayItem item) const
 {
-    int percet = 0;
-    unsigned __int64 max_value{ theApp.m_taskbar_data.GetNetspeedFigureMaxValueInBytes() };
+    if (!item.IsPlugin() && (item.ItemType() == TDI_UP || item.ItemType() == TDI_DOWN || item.ItemType() == TDI_TOTAL_SPEED))
+    {
+        auto history = m_map_history_data.find(item);
+        if (theApp.m_taskbar_data.netspeed_figure_auto_scale && history != m_map_history_data.end())
+            return history->second.Scale();
+        return static_cast<double>(theApp.m_taskbar_data.GetNetspeedFigureMaxValueInBytes());
+    }
+    return 100.0;
+}
 
-    if (net_speed >= max_value)
-        percet = 100;
-    else if (max_value > 0)
-        percet = net_speed * 100 / max_value;
-    return percet;
+int CTaskBarDlg::CalculateNetspeedPercent(DisplayItem type, unsigned __int64 net_speed)
+{
+    return AdaptiveGraphHistory::Percent(static_cast<double>(net_speed), GetGraphScale(type));
 }
 
 bool CTaskBarDlg::CheckClickedItem(CPoint point)
@@ -1412,27 +1493,25 @@ bool CTaskBarDlg::CheckClickedItem(CPoint point)
 
 void CTaskBarDlg::TryDrawGraph(IDrawCommon& drawer, const CRect& value_rect, CommonDisplayItem item_type)
 {
-    std::list<int>& list = m_map_history_data[item_type];
     COLORREF graph_color = theApp.m_taskbar_data.GetUsageGraphColor();
     if (theApp.m_taskbar_data.show_graph_dashed_box)
         drawer.DrawRectOutLine(value_rect, graph_color, 1, true);
-    int i{ -1 };
-    for (int value : list)
+    auto history = m_map_history_data.find(item_type);
+    if (history == m_map_history_data.end()) return;
+    const auto& samples = history->second.Samples();
+    if (samples.empty() || value_rect.Width() <= 1) return;
+    const auto newest = samples.back().time;
+    const auto scale = GetGraphScale(item_type);
+    auto sample = samples.begin();
+    for (int x = 0; x < value_rect.Width(); ++x)
     {
-        i++;
-        if (i == 0)     //不绘制链表头部的数据，因为在累加中，还未取平均数
-            continue;
-        if (i >= value_rect.Width())
-            break;
-        //限制范围
-        if (value > 100)
-            value = 100;
-        if (value < 0)
-            value = 0;
-        //从右往左画线
-        CPoint start_point = CPoint(value_rect.right - i, value_rect.bottom);
-        int height = value * value_rect.Height() / 100;
-        drawer.DrawLine(start_point, height, graph_color);
+        const auto age = static_cast<unsigned long long>(value_rect.Width() - 1 - x) *
+            AdaptiveGraphHistory::WindowMs / (value_rect.Width() - 1);
+        if (age > newest || newest - age < samples.front().time) continue;
+        const auto time = newest - age;
+        while (sample + 1 != samples.end() && (sample + 1)->time <= time) ++sample;
+        int height = AdaptiveGraphHistory::Percent(sample->value, scale) * value_rect.Height() / 100;
+        if (height > 0) drawer.DrawLine(CPoint(value_rect.left + x, value_rect.bottom), height, graph_color);
     }
 }
 

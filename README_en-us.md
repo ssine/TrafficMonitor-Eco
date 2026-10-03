@@ -1,3 +1,13 @@
+# TrafficMonitor Eco v0.2
+
+Eco adds event-driven sampling, demand-based taskbar repainting, adaptive upload/download graphs, compact numeric/unit alignment, and a native battery/VRAM plugin.
+
+[Download the complete Windows x64 package](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.2.0) · [Build instructions and Surface measurements (Chinese)](./ECO.md).
+
+The default profile uses Consolas 10 with two-line upload/download, CPU/RAM, and PWR/BAT. Fonts remain selectable. Graphs use a shared two-minute timeline; upload and download scale independently. The upstream project documentation follows.
+
+---
+
 **[简体中文](./README.md) | English**
 
 [![Badge](https://img.shields.io/badge/link-996.icu-%23FF4D5B.svg?style=flat-square)](https://996.icu/#/en_US)

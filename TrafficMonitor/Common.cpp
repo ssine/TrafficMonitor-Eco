@@ -222,7 +222,7 @@ const char* CCommon::GetFileContent(const wchar_t* file_path, size_t& length, bo
 
 CString CCommon::DataSizeToString(unsigned long long size, const PublicSettingData& cfg)
 {
-    //CString str;
+    // Use one decimal from the raw rate at every unit and scale.
     CString value_str, unit_str;
     if (!cfg.unit_byte)     //如果使用比特(bit)为单位，则数值乘以8
     {
@@ -238,9 +238,9 @@ CString CCommon::DataSizeToString(unsigned long long size, const PublicSettingDa
                 value_str.Format(_T("%.1f"), size / 1024.0f);
                 unit_str = _T("K");
             }
-            else if (size < 1024 * 1000)            //1000KB以下以KB为单位，保留整数
+            else if (size < 1024 * 1000)            //1000KB以下以KB为单位，保留1位小数
             {
-                value_str.Format(_T("%.0f"), size / 1024.0f);
+                value_str.Format(_T("%.1f"), size / 1024.0f);
                 unit_str = _T("K");
             }
             else if (size < 1024 * 1024 * 1000)     //1000MB以下以MB为单位，保留1位小数
@@ -250,15 +250,15 @@ CString CCommon::DataSizeToString(unsigned long long size, const PublicSettingDa
             }
             else
             {
-                value_str.Format(_T("%.2f"), size / 1024.0f / 1024.0f / 1024.0f);
+                value_str.Format(_T("%.1f"), size / 1024.0f / 1024.0f / 1024.0f);
                 unit_str = _T("G");
             }
         }
         else
         {
-            if (size < 1024 * 10)                   //10KB以下以KB为单位，保留2位小数
+            if (size < 1024 * 10)                   //10KB以下以KB为单位，保留1位小数
             {
-                value_str.Format(_T("%.2f"), size / 1024.0f);
+                value_str.Format(_T("%.1f"), size / 1024.0f);
                 unit_str = _T("KB");
             }
             else if (size < 1024 * 1000)            //1000KB以下以KB为单位，保留1位小数
@@ -266,14 +266,14 @@ CString CCommon::DataSizeToString(unsigned long long size, const PublicSettingDa
                 value_str.Format(_T("%.1f"), size / 1024.0f);
                 unit_str = _T("KB");
             }
-            else if (size < 1024 * 1024 * 1000)     //1000MB以下以MB为单位，保留2位小数
+            else if (size < 1024 * 1024 * 1000)     //1000MB以下以MB为单位，保留1位小数
             {
-                value_str.Format(_T("%.2f"), size / 1024.0f / 1024.0f);
+                value_str.Format(_T("%.1f"), size / 1024.0f / 1024.0f);
                 unit_str = _T("MB");
             }
             else
             {
-                value_str.Format(_T("%.2f"), size / 1024.0f / 1024.0f / 1024.0f);
+                value_str.Format(_T("%.1f"), size / 1024.0f / 1024.0f / 1024.0f);
                 unit_str = _T("GB");
             }
         }
@@ -283,15 +283,15 @@ CString CCommon::DataSizeToString(unsigned long long size, const PublicSettingDa
         {
             if (size < 1024 * 10)                   //10KB以下保留1位小数
                 value_str.Format(_T("%.1f"), size / 1024.0f);
-            else                    //10KB以上保留整数
-                value_str.Format(_T("%.0f"), size / 1024.0f);
+            else                    //10KB以上保留1位小数
+                value_str.Format(_T("%.1f"), size / 1024.0f);
             if (!cfg.hide_unit)
                 unit_str = _T("K");
         }
         else
         {
-            if (size < 1024 * 10)                   //10KB以下保留2位小数
-                value_str.Format(_T("%.2f"), size / 1024.0f);
+            if (size < 1024 * 10)                   //10KB以下保留1位小数
+                value_str.Format(_T("%.1f"), size / 1024.0f);
             else            //10KB以上保留1位小数
                 value_str.Format(_T("%.1f"), size / 1024.0f);
             if (!cfg.hide_unit)
@@ -307,7 +307,7 @@ CString CCommon::DataSizeToString(unsigned long long size, const PublicSettingDa
         }
         else
         {
-            value_str.Format(_T("%.2f"), size / 1024.0f / 1024.0f);
+            value_str.Format(_T("%.1f"), size / 1024.0f / 1024.0f);
             if (!cfg.hide_unit)
                 unit_str = _T("MB");
         }
