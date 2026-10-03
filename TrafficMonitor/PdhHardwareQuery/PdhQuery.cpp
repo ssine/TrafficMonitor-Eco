@@ -65,50 +65,27 @@ bool CPdhQuery::QueryValue(double& value)
 bool CPdhQuery::QueryValues(std::vector<CounterValueItem>& values)
 {
     values.clear();
-    if (!isInitialized)
+    if (!isInitialized || PdhCollectQueryData(query) != ERROR_SUCCESS)
         return false;
-
-    //更新数据
-    PdhCollectQueryData(query);
-    DWORD dwBufferSize = 0;         // Size of the pItems buffer
-    DWORD dwItemCount = 0;          // Number of items in the pItems buffer
-    PDH_FMT_COUNTERVALUE_ITEM* pItems = NULL;
-    PDH_STATUS status = PdhGetFormattedCounterArray(counter, PDH_FMT_DOUBLE, &dwBufferSize, &dwItemCount, pItems);
-    if (PDH_MORE_DATA == status)
-    {
-        pItems = (PDH_FMT_COUNTERVALUE_ITEM*)malloc(dwBufferSize);
-        if (pItems)
-        {
-            status = PdhGetFormattedCounterArray(counter, PDH_FMT_DOUBLE, &dwBufferSize, &dwItemCount, pItems);
-            if (ERROR_SUCCESS == status)
-            {
-                // Loop through the array and print the instance name and counter value.
-                for (DWORD i = 0; i < dwItemCount; i++)
-                {
-                    CounterValueItem value_item;
-                    value_item.name = pItems[i].szName;
-                    value_item.value = pItems[i].FmtValue.doubleValue;
-                    values.push_back(value_item);
-                }
-            }
-            else
-            {
-                return false;
-            }
-
-            free(pItems);
-            pItems = NULL;
-            dwBufferSize = dwItemCount = 0;
-        }
-        else
-        {
-            return false;
-        }
-    }
-    else
-    {
+    DWORD bytes = 0, count = 0;
+    auto status = PdhGetFormattedCounterArray(counter, PDH_FMT_DOUBLE, &bytes, &count, nullptr);
+    if (status != PDH_MORE_DATA)
         return false;
+    m_array_buffer.resize(bytes);
+    auto* items = reinterpret_cast<PDH_FMT_COUNTERVALUE_ITEM*>(m_array_buffer.data());
+    status = PdhGetFormattedCounterArray(counter, PDH_FMT_DOUBLE, &bytes, &count, items);
+    if (status != ERROR_SUCCESS)
+        return false;
+    values.reserve(count);
+    for (DWORD i = 0; i < count; ++i)
+    {
+        if (items[i].FmtValue.CStatus != PDH_CSTATUS_VALID_DATA &&
+            items[i].FmtValue.CStatus != PDH_CSTATUS_NEW_DATA)
+            continue;
+        CounterValueItem item;
+        item.name = items[i].szName;
+        item.value = items[i].FmtValue.doubleValue;
+        values.push_back(std::move(item));
     }
-
     return true;
 }

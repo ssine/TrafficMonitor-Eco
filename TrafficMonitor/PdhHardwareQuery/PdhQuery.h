@@ -23,4 +23,5 @@ protected:
     HCOUNTER counter = nullptr;
     bool isInitialized = false;
     CString fullCounterPath;
+    std::vector<unsigned char> m_array_buffer;
 };

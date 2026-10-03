@@ -1151,7 +1151,9 @@ BOOL CTrafficMonitorDlg::OnInitDialog()
     SetTimer(MAIN_TIMER, 1000, NULL);
 
     SetTimer(MONITOR_TIMER, theApp.m_general_data.monitor_time_span, NULL);
-    AfxBeginThread(MonitorThreadCallback, (LPVOID)this);
+    m_monitor_thread_started = AfxBeginThread(MonitorThreadCallback, (LPVOID)this) != nullptr;
+    if (!m_monitor_thread_started)
+        PostMessage(WM_CLOSE);
 
     //初始化窗口位置
     SetItemPosition();
@@ -1177,7 +1179,7 @@ BOOL CTrafficMonitorDlg::OnInitDialog()
     if (theApp.m_cfg_data.m_hide_main_window || (theApp.m_cfg_data.m_position_x == 0 && theApp.m_cfg_data.m_position_y == 0))
         SetTransparency(0);
 
-    SetTimer(TASKBAR_TIMER, 100, NULL);
+    SetTimer(TASKBAR_TIMER, 1000, NULL); // Eco: geometry fallback, no periodic repaint
 
     return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -1412,12 +1414,12 @@ void CTrafficMonitorDlg::DoMonitorAcquisition()
     //获取CPU频率
     //if (lite_version || is_arm64ec || !theApp.m_general_data.IsHardwareEnable(HI_CPU))
     //{
-    if (m_cpu_freq_helper.GetCpuFreq(theApp.m_cpu_freq))
+    if (IsMonitorItemNeeded(TDI_CPU_FREQ) && m_cpu_freq_helper.GetCpuFreq(theApp.m_cpu_freq))
         cpu_freq_acquired = true;
     //}
 
     //获取GPU利用率
-    if (lite_version /*|| is_arm64ec*/ || !theApp.m_general_data.IsHardwareEnable(HI_GPU))
+    if (IsMonitorItemNeeded(TDI_GPU_USAGE) && (lite_version /*|| is_arm64ec*/ || !theApp.m_general_data.IsHardwareEnable(HI_GPU)))
     {
         if (m_gpu_usage_helper.GetGpuUsage(theApp.m_gpu_usage))
             gpu_usage_acquired = true;
@@ -1426,7 +1428,7 @@ void CTrafficMonitorDlg::DoMonitorAcquisition()
     }
 
     //获取硬盘利用率
-    if (lite_version /*|| is_arm64ec*/ || !theApp.m_general_data.IsHardwareEnable(HI_HDD))
+    if (IsMonitorItemNeeded(TDI_HDD_USAGE) && (lite_version /*|| is_arm64ec*/ || !theApp.m_general_data.IsHardwareEnable(HI_HDD)))
     {
         int disk_index = m_disk_usage_helper.FindDiskIndex(theApp.m_general_data.hard_disk_name);
         //没有找到要监控的硬盘时默认使用总体利用率
@@ -1582,41 +1584,43 @@ void CTrafficMonitorDlg::DoMonitorAcquisition()
 
 UINT CTrafficMonitorDlg::MonitorThreadCallback(LPVOID dwUser)
 {
-    CTrafficMonitorDlg* pThis = (CTrafficMonitorDlg*)dwUser;
-    while (true)
-    {
-        //获取一次监控数据
-        if (pThis->m_monitor_data_required)
-        {
-            pThis->DoMonitorAcquisition();
-            //获取到监控数据后重置flag
-            pThis->m_monitor_data_required = false;
-        }
-        else
-        {
-            Sleep(10);
-        }
-
-        // 检查退出标志
-        if (pThis->m_is_thread_exit)
-        {
-            // 触发事件，通知主线程工作线程已退出
-            pThis->m_threadExitEvent.SetEvent();
-            return 0;
-        }
-    }
-
+    auto* pThis = static_cast<CTrafficMonitorDlg*>(dwUser);
+    const HANDLE events[] = { pThis->m_monitorStopEvent.m_hObject,
+                              pThis->m_monitorRequestEvent.m_hObject };
+    while (::WaitForMultipleObjects(2, events, FALSE, INFINITE) == WAIT_OBJECT_0 + 1)
+        pThis->DoMonitorAcquisition();
+    pThis->m_threadExitEvent.SetEvent();
     return 0;
 }
 
-
 void CTrafficMonitorDlg::ExitMonitorThread()
 {
-    // 通知线程退出
-    m_is_thread_exit = true;
+    if (!m_monitor_thread_started)
+        return;
+    KillTimer(MONITOR_TIMER);
+    m_monitorStopEvent.SetEvent();
+    // Acquisition sends the completion message synchronously. Dispatch sent
+    // messages while joining so shutdown cannot deadlock or release live state.
+    const HANDLE done = m_threadExitEvent.m_hObject;
+    while (::MsgWaitForMultipleObjects(1, &done, FALSE, INFINITE, QS_SENDMESSAGE) == WAIT_OBJECT_0 + 1)
+    {
+        MSG message;
+        ::PeekMessage(&message, nullptr, 0, 0, PM_NOREMOVE);
+    }
+    m_monitor_thread_started = false;
+}
 
-    // 等待线程退出
-    ::WaitForSingleObject(m_threadExitEvent.m_hObject, 1000);
+bool CTrafficMonitorDlg::IsMonitorItemNeeded(DisplayItem item) const
+{
+    if (theApp.m_cfg_data.m_show_task_bar_wnd && theApp.m_taskbar_data.display_item.Contains(item))
+        return true;
+    if (!theApp.m_cfg_data.m_hide_main_window)
+    {
+        const auto& layout = theApp.m_cfg_data.m_show_more_info ?
+            m_skin.GetLayoutInfo().layout_l : m_skin.GetLayoutInfo().layout_s;
+        return layout.GetItem(item).show;
+    }
+    return false;
 }
 
 
@@ -1626,7 +1630,7 @@ void CTrafficMonitorDlg::OnTimer(UINT_PTR nIDEvent)
     if (nIDEvent == MONITOR_TIMER)
     {
         //通知线程获取监控数据
-        m_monitor_data_required = true;
+        m_monitorRequestEvent.SetEvent();
     }
 
     if (nIDEvent == MAIN_TIMER)
@@ -2004,8 +2008,8 @@ void CTrafficMonitorDlg::OnTimer(UINT_PTR nIDEvent)
         if (IsTaskbarWndValid())
         {
             //启动时就隐藏主窗体的情况下，无法收到dpichange消息，故需要手动检查
-            //每次100ms*10执行一次屏幕DPI检查，并且尽可能少的检查操作系统版本
-            if (m_taskbar_timer_cnt % 10 == 0 && theApp.m_win_version.IsWindows8Point1OrLater())
+            //每秒执行一次屏幕DPI检查，并且尽可能少地检查操作系统版本
+            if (theApp.m_win_version.IsWindows8Point1OrLater())
             {
                 CTaskBarDlg::CheckWindowMonitorDPIAndHandle(*m_tBarDlg, [p_TaskBarDlg = m_tBarDlg](UINT new_dpi_x, UINT new_dpi_y)
                                                             {
@@ -2020,7 +2024,8 @@ void CTrafficMonitorDlg::OnTimer(UINT_PTR nIDEvent)
             }
 
             m_tBarDlg->AdjustWindowPos();
-            m_tBarDlg->Invalidate(FALSE);
+            // New samples repaint in OnMonitorInfoUpdated; geometry changes
+            // already repaint via MoveWindow. No unconditional 10 Hz redraw.
         }
     }
 
@@ -2185,6 +2190,7 @@ void CTrafficMonitorDlg::OnTransparency40()
 
 void CTrafficMonitorDlg::OnClose()
 {
+    ExitMonitorThread();
     // TODO: 在此添加消息处理程序代码和/或调用默认值
     theApp.m_cannot_save_config_warning = true;
     theApp.m_cannot_save_global_config_warning = true;
@@ -2898,7 +2904,29 @@ afx_msg LRESULT CTrafficMonitorDlg::OnMonitorInfoUpdated(WPARAM wParam, LPARAM l
     }
     //更新任务栏窗口鼠标提示
     if (IsTaskbarWndValid())
+    {
+        std::wstring values;
+        bool custom_draw = false;
+        for (const auto& item : theApp.m_plugins.AllDisplayItemsWithPlugins())
+        {
+            if (theApp.IsTaksbarItemDisplayed(item))
+            {
+                if (item.IsPlugin() && item.PluginItem()->IsCustomDraw())
+                    custom_draw = true;
+                values += item.GetItemValueText(false).GetString();
+                values += L'\n';
+            }
+        }
+        // Graphs and custom drawing may change even when rounded text does not.
+        const bool animated = custom_draw || theApp.m_taskbar_data.show_netspeed_figure ||
+            theApp.m_taskbar_data.show_status_bar;
+        if (animated || values != m_last_taskbar_values)
+        {
+            m_last_taskbar_values = std::move(values);
+            m_tBarDlg->Invalidate(FALSE);
+        }
         m_tBarDlg->UpdateToolTips();
+    }
     return 0;
 }
 
