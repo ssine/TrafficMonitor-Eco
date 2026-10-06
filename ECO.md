@@ -1,21 +1,25 @@
-# TrafficMonitor Eco v0.2
+# TrafficMonitor Eco v0.3
 
 本仓库基于 [zhongyang219/TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor)，保留上游 Git 历史与 Anti-996 许可。
 
 - 上游基准提交：`930f17533d6098989ebad62f210aa97d75ef174b`。
-- Eco v0.1 基线提交：`6419de3`；v0.2 在此基础上增加网速自适应曲线和紧凑对齐。
+- Eco v0.1 基线提交：`6419de3`；v0.2 在此基础上增加网速自适应曲线和紧凑对齐，v0.3 增加 PWR 自适应历史柱形图。
 - 维护分支：`surface-eco-v1`。
 - 实测设备：Surface Pro for Business 11th Edition with Intel；Core Ultra 7 268V；8 个逻辑处理器；Windows 11 Pro，build 26200。
 
 ## 下载与显示设置
 
-[下载 Eco v0.2 完整 x64 程序包](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.2.0)。解压到可写目录，正常退出其他 TrafficMonitor 后运行 `TrafficMonitor.exe`。包内包含主程序、`plugins/EcoTelemetry.dll`、诊断工具、必要的运行库和默认配置。
+[下载 Eco v0.3 完整 x64 程序包](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.3.0)。解压到可写目录，正常退出其他 TrafficMonitor 后运行 `TrafficMonitor.exe`。包内包含主程序、`plugins/EcoTelemetry.dll`、诊断工具、必要的运行库和默认配置。
 
 默认每 2 秒采样，任务栏左侧双行显示上传/下载、CPU/RAM、PWR/BAT；字体为 Consolas 10，白色透明背景。网速和 PWR/BAT 固定一位小数，标签后留一格，数值和单位之间保留一个空格，例如 `PWR: +6.4 W`、`BAT: 49.4 Wh`。两行共享标签、数字和单位列，列宽按当前显示值调整，位数和正负号变化时重新计算宽度。
 
 右键 → 选项 → 任务栏窗口设置：可使用原字体选择器，或点击 Consolas 快捷按钮（字号至少 10）；可勾选“数值和单位之间用空格分隔”切换单位间距。网速图默认开启自适应缩放，关闭后可指定手动上限。
 
 上传、下载各自使用最近 120 秒的原始采样值计算量程，最低 1 KiB/s，上限为窗口内峰值的 1.25 倍；上涨立即跟随，旧峰值离开窗口后以 15 秒半衰期平滑回落。CPU/RAM 保持 0–100% 量程。所有曲线共用两分钟时间轴，历史样本按当前量程整体重画；绘制本身不添加样本。
+
+PWR 使用相同的两分钟时间轴和缩放规则，量程下限为 1 W，柱高表示功率绝对值；文字的 `+`/`-` 保留充电/放电方向。无有效读数时显示 N/A 并在图上留空。沿用“显示资源占用图”开关及历史图/状态条样式，不增加采样频率、线程或定时器。
+
+插件通过已有 `OnItemInfo` 回调提供原始数值和量程下限，主程序统一缩放全部历史；不改变插件虚函数布局。旧版主程序仍可使用标准 0–1 接口，得到 100 W 固定量程；其他插件维持原来的百分比图。
 
 ## 主要改动
 
@@ -40,7 +44,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\EcoTelemetry\build.ps1
 
 脚本在临时源码副本中统一源文件编码，不修改工作区源码。可用 `-Output` 指定输出目录，`-ConfigPath` 复制已有用户配置，`-MfcRoot` 指定独立 MFC 库路径。
 
-用户配置、流量历史和本机运行状态不随源码提交。构建脚本默认只生成程序和运行库；Release 额外提供经过整理的默认显示配置，不含 Surface 的网卡名称或流量历史。Surface 升级保留其已有配置和历史，并调整字体、单位间距及网速图设置。
+用户配置、流量历史和本机运行状态不随源码提交。构建脚本默认只生成程序和运行库；Release 额外提供经过整理的默认显示配置，不含 Surface 的网卡名称或流量历史。Surface 升级保留其已有配置和历史；v0.2 调整了字体、单位间距及网速图设置，v0.3 保留这些设置。
 
 自适应量程的独立验证可在支持 C++17 的环境运行：
 
@@ -49,7 +53,16 @@ g++ -std=c++17 -Wall -Wextra -pedantic tests/adaptive_graph_test.cpp -o /tmp/tra
 /tmp/trafficmonitor-adaptive-test
 ```
 
-覆盖独立上下行量程、增长/回落、原始历史保留、固定量程、重复时间、无效采样和容量边界。
+覆盖独立上下行量程、增长/回落、原始历史保留、固定量程、重复时间、无效采样、容量边界，以及功率量程下限、峰值过期和时间回退。
+
+实际插件的集成测试可在 Windows 的 x64 Native Tools Command Prompt 中运行（从仓库根目录执行，不定义 `NDEBUG`）：
+
+```cmd
+cl /nologo /std:c++17 /utf-8 /O2 /MT /EHsc /DUNICODE /D_UNICODE tests\eco_power_graph_test.cpp /Fo:%TEMP%\eco_power_graph_test.obj /Fe:%TEMP%\eco_power_graph_test.exe /link setupapi.lib pdh.lib
+%TEMP%\eco_power_graph_test.exe
+```
+
+覆盖充放电正负值、零功率、N/A、非功率项排除、可选接口参数检查、旧接口取值范围和并发读写。
 
 ## Surface v0.1 历史基线（2026-10-04）
 
@@ -76,6 +89,19 @@ CPU 按进程 CPU 时间差 / 实际时长 / 8 计算，表示整机 CPU 容量�
 通过：Windows x64 Lite 与原生插件构建；自适应量程独立测试；字体切换、Consolas 快捷按钮与至少 10 号字号；自动量程开关及手动上限启用状态；实际上传/下载曲线；网速和 PWR/BAT 一位小数及单位空格；`+99.9 W`、`-99.9 W`、`+999.9 W`、`-999.9 W` 的完整显示；设置页按钮无重叠；正常退出和重启。
 
 边界值来自独立测试目录中的合成插件，截图后已恢复正式程序。Surface 日常程序的 EXE/DLL 与 Release 程序包一致，桌面 Eco 快捷方式指向 v0.2；其原配置和流量历史保留。
+
+## Surface v0.3 验证（2026-10-06）
+
+通过：Windows x64 Lite、插件和诊断工具构建；上述两个独立/集成测试；Surface 交互桌面任务栏中实际 PWR 历史柱形图及原六项布局；正常退出后升级并重新启动。升级前已完整备份，用户配置文件哈希未变，正式 EXE/DLL 与发布包一致。沿用原安装目录和快捷方式，目录名仍含 v0.2。
+
+升级前后各进行一段约 60 秒采样，CPU 按整机 8 个逻辑处理器容量计算：
+
+| 版本 | 平均进程 CPU | 私有内存 |
+| --- | ---: | ---: |
+| v0.2 升级前 | 0.195% | 9.879 MiB |
+| v0.3 升级后 | 0.140% | 9.898 MiB |
+
+短时观察未见明显新增 CPU 负担，私有内存基本持平。这是顺序采样，其他应用负载未固定，不能据此认定性能提升。旧进程工作集经过裁剪，新进程刚启动，工作集不用于版本内存对比；本轮没有做续航测试。
 
 ## 许可
 

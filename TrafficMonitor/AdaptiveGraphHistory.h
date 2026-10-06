@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <deque>
+#include <limits>
 
 // Raw samples share a two-minute time axis. Repainting never adds samples,
 // and changing the scale reinterprets the entire visible history consistently.
@@ -12,10 +13,15 @@ public:
     struct Sample { std::uint64_t time; double value; };
     static constexpr std::uint64_t WindowMs = 120000;
 
-    void Add(std::uint64_t now, double value, bool adaptive)
+    void Add(std::uint64_t now, double value, bool adaptive, double minimumScale = 1024.0)
     {
-        if (!std::isfinite(value) || value < 0) value = 0;
+        // Preserve missing readings so the renderer leaves a gap.
+        if (!std::isfinite(value)) value = std::numeric_limits<double>::quiet_NaN();
+        else if (value < 0) value = 0;
+        if (!std::isfinite(minimumScale) || minimumScale <= 0) minimumScale = 1024.0;
         if (!samples_.empty() && now < samples_.back().time) samples_.clear();
+        if (samples_.empty()) scale_ = minimumScale;
+        adaptive_ = adaptive;
         const auto elapsed = samples_.empty() ? 0 : now - samples_.back().time;
         if (!samples_.empty() && now == samples_.back().time)
             samples_.back().value = value;
@@ -29,7 +35,7 @@ public:
         {
             double peak = 0;
             for (const auto& sample : samples_) peak = (std::max)(peak, sample.value);
-            const double target = (std::max)(1024.0, peak * 1.25);
+            const double target = (std::max)(minimumScale, peak * 1.25);
             // Grow immediately; fall with a 15-second half-life once old peaks
             // leave the window. A small floor keeps idle noise from filling it.
             if (target >= scale_) scale_ = target;
@@ -39,6 +45,7 @@ public:
 
     const std::deque<Sample>& Samples() const { return samples_; }
     double Scale() const { return scale_; }
+    bool IsAdaptive() const { return adaptive_; }
     static int Percent(double value, double scale)
     {
         if (!(scale > 0) || !std::isfinite(value)) return 0;
@@ -48,4 +55,5 @@ public:
 private:
     std::deque<Sample> samples_;
     double scale_ = 1024.0;
+    bool adaptive_ = false;
 };

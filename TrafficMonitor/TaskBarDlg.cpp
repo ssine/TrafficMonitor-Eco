@@ -12,6 +12,7 @@
 #include "DrawCommonFactory.h"
 #include "WindowsWebExperienceDetector.h"
 #include "TaskbarHelper.h"
+#include "../include/EcoGraphSample.h"
 
 #ifdef DEBUG
 // DX调试信息捕获
@@ -20,6 +21,12 @@
 #endif
 
 namespace {
+bool ReadAdaptivePluginGraph(IPluginItem* item, EcoGraphSample& sample)
+{
+    return item->OnItemInfo(IPluginItem::IIT_ECO_GRAPH_SAMPLE, &sample, nullptr) == &sample &&
+        std::isfinite(sample.minimumScale) && sample.minimumScale > 0;
+}
+
 // Identify numeric values with either adjacent or separated units.
 int NumericUnitSplit(const CString& text)
 {
@@ -337,7 +344,6 @@ void CTaskBarDlg::DrawPluginItem(IDrawCommon& drawer, IPluginItem* item, CRect r
     {
         if (item->IsDrawResourceUsageGraph())
         {
-             int figure_value = item->GetResourceUsageGraphValue() * 100;
             //横向滚动图
             if (theApp.m_taskbar_data.cm_graph_type)
             {
@@ -346,6 +352,10 @@ void CTaskBarDlg::DrawPluginItem(IDrawCommon& drawer, IPluginItem* item, CRect r
             //柱状图
             else
             {
+                EcoGraphSample sample;
+                const int figure_value = ReadAdaptivePluginGraph(item, sample)
+                    ? AdaptiveGraphHistory::Percent(sample.value, GetGraphScale(item))
+                    : AdaptiveGraphHistory::Percent(item->GetResourceUsageGraphValue(), 1.0);
                 TryDrawStatusBar(drawer, rect, figure_value);
             }
         }
@@ -1428,12 +1438,17 @@ void CTaskBarDlg::UpdateGraphHistory()
     {
         double value = 0;
         bool network = false;
+        bool adaptivePlugin = false;
+        double minimumScale = 1024.0;
         if (item.IsPlugin())
         {
             auto* plugin = theApp.m_plugins.GetPluginByItem(item.PluginItem());
             if (!theApp.m_taskbar_data.show_status_bar || !plugin || plugin->GetAPIVersion() < 6 ||
                 !item.PluginItem()->IsDrawResourceUsageGraph()) continue;
-            value = item.PluginItem()->GetResourceUsageGraphValue() * 100;
+            EcoGraphSample sample;
+            adaptivePlugin = ReadAdaptivePluginGraph(item.PluginItem(), sample);
+            value = adaptivePlugin ? sample.value : item.PluginItem()->GetResourceUsageGraphValue() * 100;
+            if (adaptivePlugin) minimumScale = sample.minimumScale;
         }
         else
         {
@@ -1456,12 +1471,19 @@ void CTaskBarDlg::UpdateGraphHistory()
             default: continue;
             }
         }
-        m_map_history_data[item].Add(now, value, network && theApp.m_taskbar_data.netspeed_figure_auto_scale);
+        m_map_history_data[item].Add(now, value,
+            adaptivePlugin || (network && theApp.m_taskbar_data.netspeed_figure_auto_scale), minimumScale);
     }
 }
 
 double CTaskBarDlg::GetGraphScale(CommonDisplayItem item) const
 {
+    if (item.IsPlugin())
+    {
+        auto history = m_map_history_data.find(item);
+        if (history != m_map_history_data.end() && history->second.IsAdaptive())
+            return history->second.Scale();
+    }
     if (!item.IsPlugin() && (item.ItemType() == TDI_UP || item.ItemType() == TDI_DOWN || item.ItemType() == TDI_TOTAL_SPEED))
     {
         auto history = m_map_history_data.find(item);

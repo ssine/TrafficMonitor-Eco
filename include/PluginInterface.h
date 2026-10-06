@@ -135,7 +135,10 @@ public:
 
     enum ItemInfoType
     {
-
+        // Optional Eco extension, using the existing API v4 callback (no new
+        // virtual methods). para1 points to EcoGraphSample from EcoGraphSample.h.
+        // Return para1 when supported, nullptr otherwise.
+        IIT_ECO_GRAPH_SAMPLE = 0x45434f01,
     };
     //预留的接口
     virtual void* OnItemInfo(ItemInfoType, void* para1, void* para2) { return 0; }

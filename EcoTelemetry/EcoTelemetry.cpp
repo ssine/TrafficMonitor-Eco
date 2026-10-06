@@ -17,6 +17,7 @@
 #include <vector>
 #include <utility>
 #include "../include/PluginInterface.h"
+#include "../include/EcoGraphSample.h"
 
 namespace {
 constexpr GUID batteryClass{0x72631e54, 0x78a4, 0x11d0,
@@ -184,8 +185,8 @@ private:
 
 class Item final : public IPluginItem {
 public:
-    Item(const wchar_t* name, const wchar_t* id, const wchar_t* label, const wchar_t* sample, std::atomic<bool>* demand = nullptr)
-        : name_(name), id_(id), label_(label), sample_(sample), demand_(demand) {}
+    Item(const wchar_t* name, const wchar_t* id, const wchar_t* label, const wchar_t* sample, std::atomic<bool>* demand = nullptr, bool powerGraph = false)
+        : name_(name), id_(id), label_(label), sample_(sample), demand_(demand), powerGraph_(powerGraph) {}
     const wchar_t* GetItemName() const override { return name_; }
     const wchar_t* GetItemId() const override { return id_; }
     const wchar_t* GetItemLableText() const override { return label_; }
@@ -199,14 +200,37 @@ public:
         AcquireSRWLockShared(&lock_); result = value_; ReleaseSRWLockShared(&lock_);
         return result.c_str();
     }
-    void Set(const std::wstring& value) {
-        AcquireSRWLockExclusive(&lock_); value_ = value; ReleaseSRWLockExclusive(&lock_);
+    int IsDrawResourceUsageGraph() const override { return powerGraph_ ? 1 : 0; }
+    float GetResourceUsageGraphValue() const override {
+        // Compatible 0..1 value for upstream/older hosts (fixed 100 W scale).
+        const auto value = GraphValue();
+        return std::isfinite(value) ? static_cast<float>((std::min)(1.0, value / 100.0)) : 0.0f;
+    }
+    void* OnItemInfo(ItemInfoType type, void* para1, void*) override {
+        if (type != IIT_ECO_GRAPH_SAMPLE || !powerGraph_ || !para1) return nullptr;
+        auto& sample = *static_cast<EcoGraphSample*>(para1);
+        if (sample.size != sizeof(EcoGraphSample)) return nullptr;
+        sample.value = GraphValue();
+        sample.minimumScale = 1.0; // Watts; network graphs have their own floor.
+        return para1;
+    }
+    void Set(const std::wstring& value, double power = std::numeric_limits<double>::quiet_NaN()) {
+        AcquireSRWLockExclusive(&lock_);
+        value_ = value;
+        graphValue_ = std::isfinite(power) ? std::abs(power) : std::numeric_limits<double>::quiet_NaN();
+        ReleaseSRWLockExclusive(&lock_);
     }
 private:
+    double GraphValue() const {
+        AcquireSRWLockShared(&lock_); const auto value = graphValue_; ReleaseSRWLockShared(&lock_);
+        return value;
+    }
     const wchar_t *name_, *id_, *label_, *sample_;
     std::atomic<bool>* demand_;
+    bool powerGraph_;
     mutable SRWLOCK lock_ = SRWLOCK_INIT;
     std::wstring value_ = L"N/A";
+    double graphValue_ = std::numeric_limits<double>::quiet_NaN();
 };
 
 std::wstring Format(double value, bool valid, const wchar_t* format) {
@@ -222,7 +246,8 @@ public:
     IPluginItem* GetItem(int index) override { return index >= 0 && index < 4 ? &items_[index] : nullptr; }
     void DataRequired() override {
         const auto s = collector_.Read(false, gpuRequested_.exchange(false, std::memory_order_relaxed));
-        items_[0].Set(Format(s.power, s.powerValid, L"%+.1f W"));
+        items_[0].Set(Format(s.power, s.powerValid, L"%+.1f W"),
+            s.powerValid ? s.power : std::numeric_limits<double>::quiet_NaN());
         items_[1].Set(Format(s.energy, s.energyValid, L"%.1f Wh"));
         items_[2].Set(Format(s.dedicated / (1024 * 1024 * 1024.0), s.dedicatedValid, L"%.2f G"));
         items_[3].Set(Format(s.shared / (1024 * 1024 * 1024.0), s.sharedValid, L"%.2f G"));
@@ -233,12 +258,13 @@ public:
         case TMI_DESCRIPTION: return L"Native battery W/Wh and adapter GPU memory. Battery refresh: 3s. No sensor library.";
         case TMI_AUTHOR: return L"Sine / Codex";
         case TMI_COPYRIGHT: return L"2026 Sine";
-        case TMI_VERSION: return L"0.2.0";
+        case TMI_VERSION: return L"0.3.0";
         default: return L"";
         }
     }
     const wchar_t* GetTooltipInfo() override {
         return L"Battery: negative W = discharging; positive W = charging.\n"
+               L"PWR graph: magnitude, adaptive 2-minute scale (minimum 1 W).\n"
                L"Wh is remaining battery energy. N/A means unavailable.\n"
                L"GPU memory: adapter totals (all adapters), GiB; dedicated and shared separately.";
     }
@@ -246,7 +272,7 @@ private:
     Collector collector_;
     std::atomic<bool> gpuRequested_{ false };
     Item items_[4]{
-        {L"电池功率", L"BatteryPowerMon", L"PWR:", L"+999.9 W"},
+        {L"电池功率", L"BatteryPowerMon", L"PWR:", L"+999.9 W", nullptr, true},
         {L"剩余电量", L"BatteryCapacityMon", L"BAT:", L"999.9 Wh"},
         {L"专用显存", L"eco_gpu_dedicated", L"VRAM:", L"9.99 G", &gpuRequested_},
         {L"共享显存", L"eco_gpu_shared", L"SHR:", L"9.99 G", &gpuRequested_}
