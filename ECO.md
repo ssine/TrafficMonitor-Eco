@@ -1,17 +1,39 @@
-# TrafficMonitor Eco v0.3
+# TrafficMonitor Eco v0.4
 
 本仓库基于 [zhongyang219/TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor)，保留上游 Git 历史与 Anti-996 许可。
 
 - 上游基准提交：`930f17533d6098989ebad62f210aa97d75ef174b`。
-- Eco v0.1 基线提交：`6419de3`；v0.2 在此基础上增加网速自适应曲线和紧凑对齐，v0.3 增加 PWR 自适应历史柱形图。
+- Eco v0.1 基线提交：`6419de3`；v0.2 在此基础上增加网速自适应曲线和紧凑对齐，v0.3 增加 PWR 自适应历史柱形图，v0.4 增加桌面完整温度版与共用采样的桌面 PWR。
 - 维护分支：`surface-eco-v1`。
 - 实测设备：Surface Pro for Business 11th Edition with Intel；Core Ultra 7 268V；8 个逻辑处理器；Windows 11 Pro，build 26200。
 
+
+## v0.4 桌面完整版本
+
+Desktop Full 默认每 1 秒采样，沿用八个指标及其双行顺序：上传/下载、CPU/GPU 使用率、RAM/PWR、CPU/GPU 温度。Consolas 10、标签后一格、数值与单位一格；上传/下载自适应曲线和资源历史图开启。Surface Lite 的电池端 PWR/BAT 显示方式保持兼容。
+
+新增桌面插件项 `SmartPowerMeterMon`，保留旧 PowerMonPlugin 的桌面功率 ID。CPU/platform 与独立 GPU 功率来自主程序已有的温度监控实例，优先采用总量传感器，避免包功率与各组件重复叠加；Intel 集成 GPU 不重复计入。它是传感器估计值，不是插座实测。无有效 CPU/GPU 读数时显示 N/A、历史图留空，有效 0 W 保留。
+
+主程序通过已有 `OnItemInfo` 传入桌面功率快照，不增加插件硬件库、采集线程或定时器。Full 使用官方 LibreHardwareMonitor **0.9.6** 及其完整托管依赖，CPU 传感器需要 PawnIO ≥2.0 和管理员权限。包内提供官方签名的 PawnIO 2.2 安装程序供新机器手动安装；满足要求的已有驱动无需更新。不要沿用旧的 `TrafficMonitor.sys`。
+
+`OpenHardwareMonitorApi.dll` 的私有接口增加了功率方法，必须与同包 EXE 一起更新，不能混用旧 DLL。插件公共虚函数布局不变，Surface 的四个既有项目 ID 和顺序不变，第五项为桌面 PWR。Lite 没有温度硬件库，桌面 PWR 会显示 N/A；电池 PWR 正负号仍表示充放电。
+
+2026-10-08 实测 Sine-Desktop-2（i7-13700KF / RTX 4090 / 24 逻辑处理器 / Windows 11 build 22631）：保留原八项、1 秒周期、网卡选择和 308 条流量记录，完成正常退出与通过原登录启动任务再次启动，配置在再次启动前后未变。已装 PawnIO 2.1 可直接读取 CPU/GPU 温度与 PWR，没有修改驱动或安全策略。
+
+| 同机版本 | 采样时间 | 平均 CPU（整机容量口径） | 私有内存 |
+| --- | ---: | ---: | ---: |
+| 原版 1.85.1 + PowerMonPlugin 1.3.7.5 | 120.8 秒 | 0.0507% | 51.6 MiB |
+| Eco v0.4 Full + 原生插件，开启图表 | 120.8 秒 | 0.0453% | 52.9 MiB |
+
+这两段按顺序在日常负载下采样，CPU 为进程 CPU 时间差 / 实际时长 / 24；内存为采样结束值。开销接近，不能将短时差值当作确定或长期的性能提升。原安装曾有 NVIDIA `nvml.dll` 访问异常记录，新版也使用显卡驱动的 NVML；短时验证没有复现，不能证明永久解决该异常。
+
+第三方许可证、版本与源代码位置见 [EcoTelemetry/third-party](EcoTelemetry/third-party)。Release 另附相应第三方源码归档。
+
 ## 下载与显示设置
 
-[下载 Eco v0.3 完整 x64 程序包](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.3.0)。解压到可写目录，正常退出其他 TrafficMonitor 后运行 `TrafficMonitor.exe`。包内包含主程序、`plugins/EcoTelemetry.dll`、诊断工具、必要的运行库和默认配置。
+[下载 Eco v0.4 Full / Lite 完整 x64 程序包](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.4.0)。解压到可写目录，正常退出其他 TrafficMonitor 后运行 `TrafficMonitor.exe`。包内包含主程序、`plugins/EcoTelemetry.dll`、诊断工具、必要的运行库和默认配置。
 
-默认每 2 秒采样，任务栏左侧双行显示上传/下载、CPU/RAM、PWR/BAT；字体为 Consolas 10，白色透明背景。网速和 PWR/BAT 固定一位小数，标签后留一格，数值和单位之间保留一个空格，例如 `PWR: +6.4 W`、`BAT: 49.4 Wh`。两行共享标签、数字和单位列，列宽按当前显示值调整，位数和正负号变化时重新计算宽度。
+Surface Lite 默认每 2 秒采样，任务栏左侧双行显示上传/下载、CPU/RAM、PWR/BAT；字体为 Consolas 10，白色透明背景。网速和 PWR/BAT 固定一位小数，标签后留一格，数值和单位之间保留一个空格，例如 `PWR: +6.4 W`、`BAT: 49.4 Wh`。两行共享标签、数字和单位列，列宽按当前显示值调整，位数和正负号变化时重新计算宽度。
 
 右键 → 选项 → 任务栏窗口设置：可使用原字体选择器，或点击 Consolas 快捷按钮（字号至少 10）；可勾选“数值和单位之间用空格分隔”切换单位间距。网速图默认开启自适应缩放，关闭后可指定手动上限。
 
@@ -40,11 +62,20 @@ PWR 使用相同的两分钟时间轴和缩放规则，量程下限为 1 W，柱
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\EcoTelemetry\build.ps1
 ```
 
-脚本生成 x64 `Release (lite)` 主程序、`plugins\EcoTelemetry.dll` 和一次性诊断工具 `TelemetryProbe.exe`，并复制必要的 release 运行库和许可证。默认输出目录为 `eco-release`。
+默认脚本生成 x64 `Release (lite)` 主程序、`plugins\EcoTelemetry.dll` 和一次性诊断工具 `TelemetryProbe.exe`，并复制必要的 release 运行库和许可证。默认输出目录为 `eco-release`。
 
 脚本在临时源码副本中统一源文件编码，不修改工作区源码。可用 `-Output` 指定输出目录，`-ConfigPath` 复制已有用户配置，`-MfcRoot` 指定独立 MFC 库路径。
 
-用户配置、流量历史和本机运行状态不随源码提交。构建脚本默认只生成程序和运行库；Release 额外提供经过整理的默认显示配置，不含 Surface 的网卡名称或流量历史。Surface 升级保留其已有配置和历史；v0.2 调整了字体、单位间距及网速图设置，v0.3 保留这些设置。
+
+完整温度版需要 C++/CLI 支持、.NET Framework 4.7.2 开发包，并解压官方 [LibreHardwareMonitor v0.9.6](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/tag/v0.9.6) 运行库：
+
+```powershell
+.\EcoTelemetry\build.ps1 -Full -HardwareRuntimePath C:\deps\LibreHardwareMonitor-0.9.6
+```
+
+Full 先编译 `OpenHardwareMonitorApi.dll`，再编译 `Release` 主程序；递归复制官方库的托管依赖，同时生成 `HardwareProbe.exe`。它采集三次 CPU/GPU 温度和桌面 PWR，用于管理员权限下验证驱动和 DLL 加载。可用 `-FrameworkRoot`、`-NetFxSdkRoot` 指向独立 .NET Framework 引用程序集与 SDK，无需更改系统安装。程序包仅带诊断工具，不常驻执行它们。
+
+用户配置、流量历史和本机运行状态不随源码提交。构建脚本同时复制 `EcoTelemetry/defaults/` 中经过整理的默认显示配置，不含本机网卡名称或流量历史；可用 `-ConfigPath` 改为已有用户配置。Surface 升级保留其已有配置和历史；v0.2 调整了字体、单位间距及网速图设置，v0.3 保留这些设置。
 
 自适应量程的独立验证可在支持 C++17 的环境运行：
 
@@ -62,7 +93,7 @@ cl /nologo /std:c++17 /utf-8 /O2 /MT /EHsc /DUNICODE /D_UNICODE tests\eco_power_
 %TEMP%\eco_power_graph_test.exe
 ```
 
-覆盖充放电正负值、零功率、N/A、非功率项排除、可选接口参数检查、旧接口取值范围和并发读写。
+覆盖充放电正负值、桌面功率快照、零功率、N/A、非功率项排除、可选接口参数检查、旧接口取值范围和并发读写。`tests/hardware_power_test.cpp` 另覆盖总量/组件选择、无效与缺失读数，按相同 C++17 命令编译运行。
 
 ## Surface v0.1 历史基线（2026-10-04）
 

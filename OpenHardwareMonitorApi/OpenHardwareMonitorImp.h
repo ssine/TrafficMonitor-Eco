@@ -33,6 +33,7 @@ namespace OpenHardwareMonitorApi {
         virtual void SetGpuEnable(bool enable) override;
         virtual void SetHddEnable(bool enable) override;
         virtual void SetMainboardEnable(bool enable) override;
+        virtual double DesktopPower() override;
 
     private:
         bool GetHardwareTemperature(IHardware^ hardware, float& temperature);
@@ -41,6 +42,7 @@ namespace OpenHardwareMonitorApi {
         bool GetHddUsage(IHardware^ hardware, float& hdd_usage);
         bool GetCPUFreq(IHardware^ hardware, float& freq);
         bool GetCpuUsage(IHardware^ hardware, float& cpu_usage);
+        static double GetDevicePower(IHardware^ hardware);
         void ResetAllValues();
         //向map中插入一个数值，如果key已经存在，则自动对新插入的key重命名
         static void InsertValueToMap(std::map<std::wstring, float>& value_map, const std::wstring& key, float value);
@@ -57,6 +59,8 @@ namespace OpenHardwareMonitorApi {
         float m_gpu_intel_usage{};
         float m_cpu_freq{};
         float m_cpu_usage{};
+        double m_cpu_power{};
+        double m_gpu_power{};
         std::map<std::wstring, float> m_all_hdd_temperature;
         std::map<std::wstring, float> m_all_cpu_temperature;
         std::map<std::wstring, float> m_all_cpu_clock;

@@ -3,6 +3,7 @@
 //
 
 #include "stdafx.h"
+#include "../include/EcoDesktopPowerSample.h"
 #include "TrafficMonitor.h"
 #include "TrafficMonitorDlg.h"
 #include "afxdialogex.h"
@@ -1464,8 +1465,9 @@ void CTrafficMonitorDlg::DoMonitorAcquisition()
     theApp.m_used_memory = static_cast<int>((statex.ullTotalPhys - statex.ullAvailPhys) / 1024);
     theApp.m_total_memory = static_cast<int>(statex.ullTotalPhys / 1024);
 
+    EcoDesktopPowerSample desktopPower;
 #ifndef WITHOUT_TEMPERATURE
-    //获取温度
+    //获取温度和功率：共用一次硬件采集，不再由功率插件重复读取。
     if (IsTemperatureNeeded() && theApp.m_pMonitor != nullptr)
     {
         CSingleLock sync(&theApp.m_minitor_lib_critical, TRUE);
@@ -1483,6 +1485,7 @@ void CTrafficMonitorDlg::DoMonitorAcquisition()
         };
 
         getHardwareInfo();
+        desktopPower.value = theApp.m_pMonitor->DesktopPower();
         auto monitor_error_message{ OpenHardwareMonitorApi::GetErrorMessage() };
         if (!monitor_error_message.empty())
         {
@@ -1560,6 +1563,14 @@ void CTrafficMonitorDlg::DoMonitorAcquisition()
         if (plugin_info.plugin != nullptr)
         {
             plugin_info.plugin->DataRequired();
+            if (plugin_info.plugin->GetAPIVersion() >= 4)
+            {
+                for (auto* item : plugin_info.plugin_items)
+                {
+                    if (wcscmp(item->GetItemId(), L"SmartPowerMeterMon") == 0)
+                        item->OnItemInfo(IPluginItem::IIT_ECO_DESKTOP_POWER, &desktopPower, nullptr);
+                }
+            }
             ITMPlugin::MonitorInfo monitor_info;
             monitor_info.up_speed = theApp.m_out_speed;
             monitor_info.down_speed = theApp.m_in_speed;

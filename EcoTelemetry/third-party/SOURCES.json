@@ -1,0 +1,66 @@
+[
+  {
+    "name": "BlackSharp.Core",
+    "version": "1.0.7",
+    "license": "MPL-2.0",
+    "source": "https://github.com/Blacktempel/BlackSharp",
+    "commit": "c70b735c6cec123ee8a046ac4a0bc6c606f52cf0",
+    "package": "https://api.nuget.org/v3-flatcontainer/blacksharp.core/1.0.7/blacksharp.core.1.0.7.nupkg"
+  },
+  {
+    "name": "DiskInfoToolkit",
+    "version": "1.1.2",
+    "license": "MPL-2.0",
+    "source": "https://github.com/Blacktempel/DiskInfoToolkit",
+    "commit": "25319eae5781e75bcf141e844ceab2afe94d40ea",
+    "package": "https://api.nuget.org/v3-flatcontainer/diskinfotoolkit/1.1.2/diskinfotoolkit.1.1.2.nupkg"
+  },
+  {
+    "name": "RAMSPDToolkit-NDD",
+    "version": "1.4.2",
+    "license": "MPL-2.0",
+    "source": "https://github.com/Blacktempel/RAMSPDToolkit",
+    "commit": "3b47b960e0830fef344624ad5e389675d5f0a1ce",
+    "package": "https://api.nuget.org/v3-flatcontainer/ramspdtoolkit-ndd/1.4.2/ramspdtoolkit-ndd.1.4.2.nupkg"
+  },
+  {
+    "name": "HidSharp",
+    "version": "2.6.4",
+    "license": "Apache-2.0",
+    "source": "https://software.seekye.com/hidsharp",
+    "commit": "",
+    "package": "https://api.nuget.org/v3-flatcontainer/hidsharp/2.6.4/hidsharp.2.6.4.nupkg"
+  },
+  {
+    "name": "System.Memory",
+    "version": "4.6.3",
+    "license": "MIT",
+    "source": "https://github.com/dotnet/maintenance-packages",
+    "commit": "f62ca0009b038cab4725a720f386623a969d73ad",
+    "package": "https://api.nuget.org/v3-flatcontainer/system.memory/4.6.3/system.memory.4.6.3.nupkg"
+  },
+  {
+    "name": "System.Buffers",
+    "version": "4.6.1",
+    "license": "MIT",
+    "source": "https://github.com/dotnet/maintenance-packages",
+    "commit": "6b84308c9ad012f53240d72c1d716d7e42546483",
+    "package": "https://api.nuget.org/v3-flatcontainer/system.buffers/4.6.1/system.buffers.4.6.1.nupkg"
+  },
+  {
+    "name": "System.Numerics.Vectors",
+    "version": "4.6.1",
+    "license": "MIT",
+    "source": "https://github.com/dotnet/maintenance-packages",
+    "commit": "6b84308c9ad012f53240d72c1d716d7e42546483",
+    "package": "https://api.nuget.org/v3-flatcontainer/system.numerics.vectors/4.6.1/system.numerics.vectors.4.6.1.nupkg"
+  },
+  {
+    "name": "System.Runtime.CompilerServices.Unsafe",
+    "version": "6.1.2",
+    "license": "MIT",
+    "source": "https://github.com/dotnet/maintenance-packages",
+    "commit": "f62ca0009b038cab4725a720f386623a969d73ad",
+    "package": "https://api.nuget.org/v3-flatcontainer/system.runtime.compilerservices.unsafe/6.1.2/system.runtime.compilerservices.unsafe.6.1.2.nupkg"
+  }
+]

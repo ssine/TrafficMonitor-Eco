@@ -43,4 +43,25 @@ int main()
         assert(power.GetItemValueText() != nullptr);
     } while (!done.load());
     writer.join();
+
+    Plugin plugin;
+    auto* desktop = plugin.GetItem(4);
+    assert(desktop && std::wstring(desktop->GetItemId()) == L"SmartPowerMeterMon");
+    assert(!plugin.GetItem(5));
+    EcoDesktopPowerSample host;
+    for (double watts : {0.0, 45.6, 450.7}) {
+        host.value = watts;
+        assert(desktop->OnItemInfo(IPluginItem::IIT_ECO_DESKTOP_POWER, &host, nullptr) == &host);
+        assert(std::wstring(desktop->GetItemValueText()) == Format(watts, true, L"%.1f W"));
+        assert(desktop->OnItemInfo(IPluginItem::IIT_ECO_GRAPH_SAMPLE, &sample, nullptr) == &sample);
+        assert(sample.value == watts);
+    }
+    host.value = std::numeric_limits<double>::quiet_NaN();
+    desktop->OnItemInfo(IPluginItem::IIT_ECO_DESKTOP_POWER, &host, nullptr);
+    assert(std::wstring(desktop->GetItemValueText()) == L"N/A");
+    desktop->OnItemInfo(IPluginItem::IIT_ECO_GRAPH_SAMPLE, &sample, nullptr);
+    assert(std::isnan(sample.value));
+    host.size = 0;
+    assert(!desktop->OnItemInfo(IPluginItem::IIT_ECO_DESKTOP_POWER, &host, nullptr));
+    assert(!power.OnItemInfo(IPluginItem::IIT_ECO_DESKTOP_POWER, &host, nullptr));
 }

@@ -139,6 +139,8 @@ public:
         // virtual methods). para1 points to EcoGraphSample from EcoGraphSample.h.
         // Return para1 when supported, nullptr otherwise.
         IIT_ECO_GRAPH_SAMPLE = 0x45434f01,
+        // Optional host snapshot, para1 points to EcoDesktopPowerSample.
+        IIT_ECO_DESKTOP_POWER = 0x45434f02,
     };
     //预留的接口
     virtual void* OnItemInfo(ItemInfoType, void* para1, void* para2) { return 0; }

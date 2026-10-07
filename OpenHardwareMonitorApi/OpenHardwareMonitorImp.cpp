@@ -4,6 +4,7 @@
 
 #include "OpenHardwareMonitorImp.h"
 #include <vector>
+#include "HardwarePower.h"
 
 namespace OpenHardwareMonitorApi
 {
@@ -89,6 +90,22 @@ namespace OpenHardwareMonitorApi
     float COpenHardwareMonitor::CpuUsage()
     {
         return m_cpu_usage;
+    }
+
+    double COpenHardwareMonitor::DesktopPower()
+    {
+        return m_cpu_power + m_gpu_power;
+    }
+
+    double COpenHardwareMonitor::GetDevicePower(IHardware^ hardware)
+    {
+        HardwarePower power;
+        for each (ISensor^ sensor in hardware->Sensors)
+        {
+            if (sensor->SensorType == SensorType::Power && sensor->Value.HasValue)
+                power.Add(ClrStringToStdWstring(sensor->Name), sensor->Value.Value);
+        }
+        return power.Value();
     }
 
     const std::map<std::wstring, float>& COpenHardwareMonitor::AllHDDTemperature()
@@ -302,6 +319,10 @@ namespace OpenHardwareMonitorApi
         m_all_hdd_usage.clear();
         m_cpu_freq = -1;
         m_cpu_usage = -1;
+        m_cpu_power = std::numeric_limits<double>::quiet_NaN();
+        m_gpu_power = 0; // No discrete GPU contributes zero, missing sensors do not.
+        m_all_cpu_temperature.clear();
+        m_all_cpu_clock.clear();
     }
 
     void COpenHardwareMonitor::InsertValueToMap(std::map<std::wstring, float>& value_map, const std::wstring& key, float value)
@@ -339,12 +360,18 @@ namespace OpenHardwareMonitorApi
         {
             auto computer = MonitorGlobal::Instance()->computer;
             computer->Accept(MonitorGlobal::Instance()->updateVisitor);
+            bool foundCpu = false;
             for (int i = 0; i < computer->Hardware->Count; i++)
             {
                 //查找硬件类型
                 switch (computer->Hardware[i]->HardwareType)
                 {
                 case HardwareType::Cpu:
+                {
+                    const auto watts = GetDevicePower(computer->Hardware[i]);
+                    // Multiple CPU packages add their independently selected totals.
+                    m_cpu_power = foundCpu ? m_cpu_power + watts : watts;
+                    foundCpu = true;
                     if (m_cpu_temperature < 0)
                         GetCpuTemperature(computer->Hardware[i], m_cpu_temperature);
                     if (m_cpu_freq < 0)
@@ -352,13 +379,16 @@ namespace OpenHardwareMonitorApi
                     if (m_cpu_usage < 0)
                         GetCpuUsage(computer->Hardware[i], m_cpu_usage);
                     break;
+                }
                 case HardwareType::GpuNvidia:
+                    m_gpu_power += GetDevicePower(computer->Hardware[i]);
                     if (m_gpu_nvidia_temperature < 0)
                         GetHardwareTemperature(computer->Hardware[i], m_gpu_nvidia_temperature);
                     if (m_gpu_nvidia_usage < 0)
                         GetGpuUsage(computer->Hardware[i], m_gpu_nvidia_usage);
                     break;
                 case HardwareType::GpuAmd:
+                    m_gpu_power += GetDevicePower(computer->Hardware[i]);
                     if (m_gpu_ati_temperature < 0)
                         GetHardwareTemperature(computer->Hardware[i], m_gpu_ati_temperature);
                     if (m_gpu_ati_usage < 0)

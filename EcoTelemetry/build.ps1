@@ -1,4 +1,4 @@
-param([string]$MfcRoot = "", [string]$Output = "", [string]$ConfigPath = "")
+param([string]$MfcRoot = "", [string]$Output = "", [string]$ConfigPath = "", [switch]$Full, [string]$HardwareRuntimePath = "", [string]$FrameworkRoot = "", [string]$NetFxSdkRoot = "")
 $ErrorActionPreference = "Stop"
 $repo = Split-Path $PSScriptRoot -Parent
 $checkout = $repo
@@ -32,17 +32,48 @@ $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.e
 $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (!$vs) { throw 'Visual Studio C++ Build Tools were not found.' }
 $msbuild = Join-Path $vs 'MSBuild\Current\Bin\MSBuild.exe'
-$properties = @('/nologo', '/t:Rebuild', '/m:4', '/v:minimal', '/p:Configuration=Release (lite)', '/p:Platform=x64', '/p:PlatformToolset=v143', "/p:SolutionDir=$repo\")
+$configuration = if ($Full) { 'Release' } else { 'Release (lite)' }
+$properties = @('/nologo', '/t:Rebuild', '/m:4', '/v:minimal', "/p:Configuration=$configuration", '/p:Platform=x64', '/p:PlatformToolset=v143', "/p:SolutionDir=$repo\")
+if ($FrameworkRoot) { $properties += "/p:TargetFrameworkRootPath=$FrameworkRoot" }
+if ($NetFxSdkRoot) { $properties += @("/p:NETFXSDKDir=$NetFxSdkRoot\", "/p:NETFXKitsDir=$NetFxSdkRoot\") }
 if ($MfcRoot) {
     $properties += @("/p:VC_ATLMFC_IncludePath=$MfcRoot\include", "/p:VC_LibraryPath_ATL_x64=$MfcRoot\lib\x64", "/p:MFC_KeyFile=$MfcRoot\lib\x64\mfcs140u.lib")
 }
 Push-Location $repo
 try {
+    if ($Full) {
+        if (!$HardwareRuntimePath -or !(Test-Path (Join-Path $HardwareRuntimePath 'LibreHardwareMonitorLib.dll'))) {
+            throw 'Full builds require -HardwareRuntimePath pointing to the official LibreHardwareMonitor 0.9.6 release.'
+        }
+        if ((Get-FileHash (Join-Path $HardwareRuntimePath 'LibreHardwareMonitorLib.dll')).Hash -ne (Get-FileHash (Join-Path $repo 'OpenHardwareMonitorApi\LibreHardwareMonitorLib.dll')).Hash) {
+            throw 'Hardware runtime must match the source reference library.'
+        }
+        & $msbuild (Join-Path $repo 'OpenHardwareMonitorApi\OpenHardwareMonitorApi.vcxproj') @properties
+        if ($LASTEXITCODE) { throw "Hardware monitor build failed: $LASTEXITCODE" }
+    }
     & $msbuild (Join-Path $repo 'TrafficMonitor\TrafficMonitor.vcxproj') @properties
     if ($LASTEXITCODE) { throw "TrafficMonitor build failed: $LASTEXITCODE" }
     New-Item -ItemType Directory -Force $Output,(Join-Path $Output 'plugins') | Out-Null
-    $bin = Join-Path $repo 'Bin\x64\Release (lite)'
+    $bin = Join-Path $repo "Bin\x64\$configuration"
     Copy-Item (Join-Path $bin 'TrafficMonitor.exe') $Output
+    if ($Full) {
+        Copy-Item (Join-Path $bin 'OpenHardwareMonitorApi.dll') $Output
+        # Follow the library's assembly references so transitive dependencies
+        # are included without upstream GUI, pdb, or user settings.
+        $pending = New-Object 'System.Collections.Generic.Stack[string]'
+        $pending.Push('LibreHardwareMonitorLib.dll')
+        $copied = @{}
+        while ($pending.Count) {
+            $name = $pending.Pop()
+            if ($copied.ContainsKey($name)) { continue }
+            $path = Join-Path $HardwareRuntimePath $name
+            if (!(Test-Path -LiteralPath $path)) { continue } # Framework/GAC dependency.
+            $assembly = [Reflection.Assembly]::ReflectionOnlyLoadFrom($path)
+            Copy-Item -LiteralPath $path $Output
+            $copied[$name] = $true
+            foreach ($reference in $assembly.GetReferencedAssemblies()) { $pending.Push($reference.Name + '.dll') }
+        }
+    }
     $devcmd = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
     $lines = @(
         '@echo off',
@@ -57,6 +88,18 @@ try {
     Set-Content -LiteralPath $batch -Value $lines -Encoding ASCII
     & $env:ComSpec /d /c $batch
     if ($LASTEXITCODE) { throw "Telemetry build failed: $LASTEXITCODE" }
+    if ($Full) {
+        $probeBatch = Join-Path $Output 'compile-hardware-probe.cmd'
+        Set-Content -LiteralPath $probeBatch -Encoding ASCII -Value @(
+            '@echo off',
+            "call `"$devcmd`" >nul",
+            "cl /nologo /std:c++17 /utf-8 /O2 /MT /EHsc `"$repo\tests\hardware_probe.cpp`" /Fo:`"$Output\HardwareProbe.obj`" /Fe:`"$Output\HardwareProbe.exe`" /link `"$bin\OpenHardwareMonitorApi.lib`"",
+            'exit /b %errorlevel%'
+        )
+        & $env:ComSpec /d /c $probeBatch
+        if ($LASTEXITCODE) { throw "Hardware probe build failed: $LASTEXITCODE" }
+        Copy-Item (Join-Path $PSScriptRoot 'third-party') $Output -Recurse -Force
+    }
     # App-local release runtimes: no installer or machine-wide change.
     $crtBase = Join-Path $vs 'VC\Redist\MSVC'
     $crtVersion = Get-ChildItem $crtBase -Directory | Where-Object { $_.Name -match '^([0-9]+\.)+[0-9]+$' } | Sort-Object { [version]$_.Name } | Select-Object -Last 1
@@ -73,5 +116,9 @@ try {
     Copy-Item (Join-Path $checkout 'LICENSE'),(Join-Path $checkout 'LICENSE_CN') $Output
     Copy-Item (Join-Path $PSScriptRoot 'README.txt') (Join-Path $Output 'README-Eco.txt')
     Set-Content (Join-Path $Output 'global_cfg.ini') -Value "[config]`r`nportable_mode = true" -Encoding UTF8
-    if ($ConfigPath) { Copy-Item -LiteralPath $ConfigPath (Join-Path $Output 'config.ini') }
+    if (!$ConfigPath) {
+        $defaultConfig = if ($Full) { 'desktop.ini' } else { 'surface.ini' }
+        $ConfigPath = Join-Path $PSScriptRoot "defaults\$defaultConfig"
+    }
+    Copy-Item -LiteralPath $ConfigPath (Join-Path $Output 'config.ini')
 } finally { Pop-Location }

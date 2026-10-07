@@ -1,8 +1,8 @@
 # TrafficMonitor Eco
 
-此仓库保存针对 Surface Pro Intel 的 TrafficMonitor Eco 改动，包括事件驱动采集、任务栏按需刷新、网速自适应曲线、紧凑文字对齐及原生电池/显存插件。
+此仓库保存针对 Windows 桌面与 Surface Pro Intel 的 TrafficMonitor Eco 改动，包括事件驱动采集、任务栏按需刷新、网速自适应曲线、紧凑文字对齐及原生电池/显存插件及与温度采样共用的桌面功率。
 
-**[下载 Eco v0.2 完整程序包](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.2.0)** · **[Eco 改动、构建方法与实测结果](./ECO.md)** · 当前分支：`surface-eco-v1`。下方保留上游项目说明。
+**[下载 Eco v0.4 Full / Lite 完整程序包](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.4.0)** · **[Eco 改动、构建方法与实测结果](./ECO.md)** · 当前分支：`surface-eco-v1`。下方保留上游项目说明。
 
 ---
 

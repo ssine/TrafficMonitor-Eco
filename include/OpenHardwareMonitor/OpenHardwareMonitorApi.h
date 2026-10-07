@@ -25,6 +25,8 @@ namespace OpenHardwareMonitorApi
         virtual void SetGpuEnable(bool enable) = 0;
         virtual void SetHddEnable(bool enable) = 0;
         virtual void SetMainboardEnable(bool enable) = 0;
+        // Eco full builds pair this interface with their own monitor DLL.
+        virtual double DesktopPower() = 0;
     };
 
     OPENHARDWAREMONITOR_API std::shared_ptr<IOpenHardwareMonitor> CreateInstance();

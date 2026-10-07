@@ -18,6 +18,7 @@
 #include <utility>
 #include "../include/PluginInterface.h"
 #include "../include/EcoGraphSample.h"
+#include "../include/EcoDesktopPowerSample.h"
 
 namespace {
 constexpr GUID batteryClass{0x72631e54, 0x78a4, 0x11d0,
@@ -185,8 +186,8 @@ private:
 
 class Item final : public IPluginItem {
 public:
-    Item(const wchar_t* name, const wchar_t* id, const wchar_t* label, const wchar_t* sample, std::atomic<bool>* demand = nullptr, bool powerGraph = false)
-        : name_(name), id_(id), label_(label), sample_(sample), demand_(demand), powerGraph_(powerGraph) {}
+    Item(const wchar_t* name, const wchar_t* id, const wchar_t* label, const wchar_t* sample, std::atomic<bool>* demand = nullptr, bool powerGraph = false, bool desktopPower = false)
+        : name_(name), id_(id), label_(label), sample_(sample), demand_(demand), powerGraph_(powerGraph), desktopPower_(desktopPower) {}
     const wchar_t* GetItemName() const override { return name_; }
     const wchar_t* GetItemId() const override { return id_; }
     const wchar_t* GetItemLableText() const override { return label_; }
@@ -207,6 +208,15 @@ public:
         return std::isfinite(value) ? static_cast<float>((std::min)(1.0, value / 100.0)) : 0.0f;
     }
     void* OnItemInfo(ItemInfoType type, void* para1, void*) override {
+        if (type == IIT_ECO_DESKTOP_POWER && desktopPower_ && para1) {
+            const auto& sample = *static_cast<const EcoDesktopPowerSample*>(para1);
+            if (sample.size != sizeof(EcoDesktopPowerSample)) return nullptr;
+            const bool valid = std::isfinite(sample.value) && sample.value >= 0;
+            wchar_t text[64];
+            swprintf_s(text, L"%.1f W", valid ? sample.value : 0.0);
+            Set(valid ? text : L"N/A", valid ? sample.value : std::numeric_limits<double>::quiet_NaN());
+            return para1;
+        }
         if (type != IIT_ECO_GRAPH_SAMPLE || !powerGraph_ || !para1) return nullptr;
         auto& sample = *static_cast<EcoGraphSample*>(para1);
         if (sample.size != sizeof(EcoGraphSample)) return nullptr;
@@ -228,6 +238,7 @@ private:
     const wchar_t *name_, *id_, *label_, *sample_;
     std::atomic<bool>* demand_;
     bool powerGraph_;
+    bool desktopPower_;
     mutable SRWLOCK lock_ = SRWLOCK_INIT;
     std::wstring value_ = L"N/A";
     double graphValue_ = std::numeric_limits<double>::quiet_NaN();
@@ -243,7 +254,7 @@ std::wstring Format(double value, bool valid, const wchar_t* format) {
 
 class Plugin final : public ITMPlugin {
 public:
-    IPluginItem* GetItem(int index) override { return index >= 0 && index < 4 ? &items_[index] : nullptr; }
+    IPluginItem* GetItem(int index) override { return index >= 0 && index < 5 ? &items_[index] : nullptr; }
     void DataRequired() override {
         const auto s = collector_.Read(false, gpuRequested_.exchange(false, std::memory_order_relaxed));
         items_[0].Set(Format(s.power, s.powerValid, L"%+.1f W"),
@@ -254,16 +265,17 @@ public:
     }
     const wchar_t* GetInfo(PluginInfoIndex index) override {
         switch (index) {
-        case TMI_NAME: return L"Surface Eco Telemetry";
-        case TMI_DESCRIPTION: return L"Native battery W/Wh and adapter GPU memory. Battery refresh: 3s. No sensor library.";
+        case TMI_NAME: return L"Eco Telemetry";
+        case TMI_DESCRIPTION: return L"Battery W/Wh, adapter GPU memory and shared host desktop power. No plugin sensor library.";
         case TMI_AUTHOR: return L"Sine / Codex";
         case TMI_COPYRIGHT: return L"2026 Sine";
-        case TMI_VERSION: return L"0.3.0";
+        case TMI_VERSION: return L"0.4.0";
         default: return L"";
         }
     }
     const wchar_t* GetTooltipInfo() override {
         return L"Battery: negative W = discharging; positive W = charging.\n"
+               L"Desktop PWR: CPU + discrete GPU sensor totals, shared with host temperature sampling; not wall power.\n"
                L"PWR graph: magnitude, adaptive 2-minute scale (minimum 1 W).\n"
                L"Wh is remaining battery energy. N/A means unavailable.\n"
                L"GPU memory: adapter totals (all adapters), GiB; dedicated and shared separately.";
@@ -271,11 +283,12 @@ public:
 private:
     Collector collector_;
     std::atomic<bool> gpuRequested_{ false };
-    Item items_[4]{
+    Item items_[5]{
         {L"电池功率", L"BatteryPowerMon", L"PWR:", L"+999.9 W", nullptr, true},
         {L"剩余电量", L"BatteryCapacityMon", L"BAT:", L"999.9 Wh"},
         {L"专用显存", L"eco_gpu_dedicated", L"VRAM:", L"9.99 G", &gpuRequested_},
-        {L"共享显存", L"eco_gpu_shared", L"SHR:", L"9.99 G", &gpuRequested_}
+        {L"共享显存", L"eco_gpu_shared", L"SHR:", L"9.99 G", &gpuRequested_},
+        {L"桌面硬件功率", L"SmartPowerMeterMon", L"PWR:", L"999.9 W", nullptr, true, true}
     };
 };
 }
