@@ -1,4 +1,4 @@
-# TrafficMonitor Eco v0.4
+# TrafficMonitor Eco v0.4.1
 
 本仓库基于 [zhongyang219/TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor)，保留上游 Git 历史与 Anti-996 许可。
 
@@ -7,6 +7,12 @@
 - 维护分支：`surface-eco-v1`。
 - 实测设备：Surface Pro for Business 11th Edition with Intel；Core Ultra 7 268V；8 个逻辑处理器；Windows 11 Pro，build 26200。
 
+
+## v0.4.1 显示修正
+
+桌面 RAM 改为已用容量、一位小数，例如 `70.4 G`；沿用原程序及 Windows 的 1024 进制容量换算，单位简写为 G，底层采样值和百分比图表保持。显示单位不受网速自动/固定单位设置影响。
+
+桌面默认开启“数值右对齐”。单位对齐使用已有的共享单位列；v0.4 迁移旧配置时沿用了 `value_right_align=false`，导致数字和单位一起左对齐，本次修正该默认配置。CPU/GPU 使用率仍保留百分比，没有按使用率推算 GFLOPS/TFLOPS。
 
 ## v0.4 桌面完整版本
 
@@ -31,7 +37,7 @@ Desktop Full 默认每 1 秒采样，沿用八个指标及其双行顺序：上�
 
 ## 下载与显示设置
 
-[下载 Eco v0.4 Full / Lite 完整 x64 程序包](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.4.0)。解压到可写目录，正常退出其他 TrafficMonitor 后运行 `TrafficMonitor.exe`。包内包含主程序、`plugins/EcoTelemetry.dll`、诊断工具、必要的运行库和默认配置。
+[下载 Eco v0.4.1 Full / Lite 完整 x64 程序包](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.4.1)。解压到可写目录，正常退出其他 TrafficMonitor 后运行 `TrafficMonitor.exe`。包内包含主程序、`plugins/EcoTelemetry.dll`、诊断工具、必要的运行库和默认配置。
 
 Surface Lite 默认每 2 秒采样，任务栏左侧双行显示上传/下载、CPU/RAM、PWR/BAT；字体为 Consolas 10，白色透明背景。网速和 PWR/BAT 固定一位小数，标签后留一格，数值和单位之间保留一个空格，例如 `PWR: +6.4 W`、`BAT: 49.4 Wh`。两行共享标签、数字和单位列，列宽按当前显示值调整，位数和正负号变化时重新计算宽度。
 

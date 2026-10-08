@@ -230,7 +230,12 @@ CString CommonDisplayItem::GetItemValueText(bool is_main_window) const
         //内存利用率
         case TDI_MEMORY:
             if (cfg_data->memory_display == MemoryDisplay::MEMORY_USED)
-                str_value = CCommon::DataSizeToString(static_cast<unsigned long long>(theApp.m_used_memory) * 1024, cfg_data->separate_value_unit_with_space);
+            {
+                // Keep the existing Windows-style GB conversion, with compact
+                // one-decimal G formatting independent of the network speed unit.
+                str_value.Format(_T("%.1f%sG"), theApp.m_used_memory / 1024.0 / 1024.0,
+                    cfg_data->separate_value_unit_with_space ? _T(" ") : _T(""));
+            }
             else if (cfg_data->memory_display == MemoryDisplay::MEMORY_AVAILABLE)
                 str_value = CCommon::DataSizeToString((static_cast<unsigned long long>(theApp.m_total_memory) - static_cast<unsigned long long>(theApp.m_used_memory)) * 1024, cfg_data->separate_value_unit_with_space);
             else

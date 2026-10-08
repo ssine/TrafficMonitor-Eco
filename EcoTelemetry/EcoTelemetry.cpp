@@ -269,7 +269,7 @@ public:
         case TMI_DESCRIPTION: return L"Battery W/Wh, adapter GPU memory and shared host desktop power. No plugin sensor library.";
         case TMI_AUTHOR: return L"Sine / Codex";
         case TMI_COPYRIGHT: return L"2026 Sine";
-        case TMI_VERSION: return L"0.4.0";
+        case TMI_VERSION: return L"0.4.1";
         default: return L"";
         }
     }
