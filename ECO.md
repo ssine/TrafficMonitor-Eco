@@ -1,4 +1,4 @@
-# TrafficMonitor Eco v0.4.1
+# TrafficMonitor Eco v0.4.2
 
 本仓库基于 [zhongyang219/TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor)，保留上游 Git 历史与 Anti-996 许可。
 
@@ -7,6 +7,19 @@
 - 维护分支：`surface-eco-v1`。
 - 实测设备：Surface Pro for Business 11th Edition with Intel；Core Ultra 7 268V；8 个逻辑处理器；Windows 11 Pro，build 26200。
 
+
+## v0.4.2 网速图平滑
+
+上传、下载及总网速历史图单独使用 3 秒时间常数的指数平滑，并在相邻采样点间线性插值，减轻突发采样和阶梯感；柱高直接按像素换算，避免先取整到百分比。持续提速后，图形约 3 秒达到变化量的 63%，约 7 秒达到 90%。网速数字、流量统计和自适应量程继续使用真实采样值；资源和 PWR 图保持原样。没有增加采样、线程或刷新定时器。
+
+无效读数或超过 max(10 秒, 3 个采样周期) 的间断不跨越插值，下一次有效读数重新开始平滑。
+
+| 图表 | 量程 |
+| --- | --- |
+| CPU / GPU / RAM 使用率 | 固定 0–100%；RAM 文字显示已用 G，图仍按占用率 |
+| CPU / GPU 等温度 | 固定 0–100℃，并非硬件过热阈值 |
+| 上传 / 下载 / 总网速 | 各自的动态量程，默认最低 1 KiB/s；也可在选项中使用手动上限 |
+| PWR | 动态量程，最低 1 W；电池端按功率绝对值画图 |
 
 ## v0.4.1 显示修正
 
@@ -37,13 +50,13 @@ Desktop Full 默认每 1 秒采样，沿用八个指标及其双行顺序：上�
 
 ## 下载与显示设置
 
-[下载 Eco v0.4.1 Full / Lite 完整 x64 程序包](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.4.1)。解压到可写目录，正常退出其他 TrafficMonitor 后运行 `TrafficMonitor.exe`。包内包含主程序、`plugins/EcoTelemetry.dll`、诊断工具、必要的运行库和默认配置。
+[下载 Eco v0.4.2 Full / Lite 完整 x64 程序包](https://github.com/ssine/TrafficMonitor-Eco/releases/tag/eco-v0.4.2)。解压到可写目录，正常退出其他 TrafficMonitor 后运行 `TrafficMonitor.exe`。包内包含主程序、`plugins/EcoTelemetry.dll`、诊断工具、必要的运行库和默认配置。
 
 Surface Lite 默认每 2 秒采样，任务栏左侧双行显示上传/下载、CPU/RAM、PWR/BAT；字体为 Consolas 10，白色透明背景。网速和 PWR/BAT 固定一位小数，标签后留一格，数值和单位之间保留一个空格，例如 `PWR: +6.4 W`、`BAT: 49.4 Wh`。两行共享标签、数字和单位列，列宽按当前显示值调整，位数和正负号变化时重新计算宽度。
 
 右键 → 选项 → 任务栏窗口设置：可使用原字体选择器，或点击 Consolas 快捷按钮（字号至少 10）；可勾选“数值和单位之间用空格分隔”切换单位间距。网速图默认开启自适应缩放，关闭后可指定手动上限。
 
-上传、下载各自使用最近 120 秒的原始采样值计算量程，最低 1 KiB/s，上限为窗口内峰值的 1.25 倍；上涨立即跟随，旧峰值离开窗口后以 15 秒半衰期平滑回落。CPU/RAM 保持 0–100% 量程。所有曲线共用两分钟时间轴，历史样本按当前量程整体重画；绘制本身不添加样本。
+上传、下载各自使用最近 120 秒的原始采样值计算量程，最低 1 KiB/s，上限为窗口内峰值的 1.25 倍；上涨立即跟随，旧峰值离开窗口后以 15 秒半衰期平滑回落。CPU/GPU/RAM 保持 0–100% 量程，温度图保持 0–100℃。所有曲线共用两分钟时间轴，历史样本按当前量程整体重画；绘制本身不添加样本。
 
 PWR 使用相同的两分钟时间轴和缩放规则，量程下限为 1 W，柱高表示功率绝对值；文字的 `+`/`-` 保留充电/放电方向。无有效读数时显示 N/A 并在图上留空。沿用“显示资源占用图”开关及历史图/状态条样式，不增加采样频率、线程或定时器。
 
@@ -91,6 +104,15 @@ g++ -std=c++17 -Wall -Wextra -pedantic tests/adaptive_graph_test.cpp -o /tmp/tra
 ```
 
 覆盖独立上下行量程、增长/回落、原始历史保留、固定量程、重复时间、无效采样、容量边界，以及功率量程下限、峰值过期和时间回退。
+
+网速平滑的独立验证：
+
+```sh
+g++ -std=c++17 -Wall -Wextra -pedantic tests/network_graph_test.cpp -o /tmp/trafficmonitor-network-test
+/tmp/trafficmonitor-network-test
+```
+
+覆盖短突发抑制、真实峰值量程不变、不同采样频率的响应一致、重复时间无漂移、缺失/长间断/时钟回退、插值不越界、像素精度和未平滑资源项。
 
 实际插件的集成测试可在 Windows 的 x64 Native Tools Command Prompt 中运行（从仓库根目录执行，不定义 `NDEBUG`）：
 

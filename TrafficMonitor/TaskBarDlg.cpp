@@ -1472,7 +1472,9 @@ void CTaskBarDlg::UpdateGraphHistory()
             }
         }
         m_map_history_data[item].Add(now, value,
-            adaptivePlugin || (network && theApp.m_taskbar_data.netspeed_figure_auto_scale), minimumScale);
+            adaptivePlugin || (network && theApp.m_taskbar_data.netspeed_figure_auto_scale), minimumScale,
+            network ? AdaptiveGraphHistory::NetworkSmoothingMs : 0.0,
+            (std::max)(10000ULL, static_cast<unsigned long long>(theApp.m_general_data.monitor_time_span) * 3));
     }
 }
 
@@ -1524,6 +1526,10 @@ void CTaskBarDlg::TryDrawGraph(IDrawCommon& drawer, const CRect& value_rect, Com
     if (samples.empty() || value_rect.Width() <= 1) return;
     const auto newest = samples.back().time;
     const auto scale = GetGraphScale(item_type);
+    const bool network = !item_type.IsPlugin() && (item_type.ItemType() == TDI_UP ||
+        item_type.ItemType() == TDI_DOWN || item_type.ItemType() == TDI_TOTAL_SPEED);
+    const auto maximumGapMs = (std::max)(10000ULL,
+        static_cast<unsigned long long>(theApp.m_general_data.monitor_time_span) * 3);
     auto sample = samples.begin();
     for (int x = 0; x < value_rect.Width(); ++x)
     {
@@ -1532,7 +1538,12 @@ void CTaskBarDlg::TryDrawGraph(IDrawCommon& drawer, const CRect& value_rect, Com
         if (age > newest || newest - age < samples.front().time) continue;
         const auto time = newest - age;
         while (sample + 1 != samples.end() && (sample + 1)->time <= time) ++sample;
-        int height = AdaptiveGraphHistory::Percent(sample->value, scale) * value_rect.Height() / 100;
+        double value = sample->value;
+        if (network)
+            value = sample + 1 == samples.end() ? sample->plottedValue :
+                AdaptiveGraphHistory::Interpolate(*sample, *(sample + 1), time, maximumGapMs);
+        const int height = network ? AdaptiveGraphHistory::PixelHeight(value, scale, value_rect.Height()) :
+            AdaptiveGraphHistory::Percent(value, scale) * value_rect.Height() / 100;
         if (height > 0) drawer.DrawLine(CPoint(value_rect.left + x, value_rect.bottom), height, graph_color);
     }
 }
